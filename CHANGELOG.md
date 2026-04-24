@@ -3,6 +3,9 @@
 ## 2026-04-24
 
 ### Added
+- `wordCount` utility tests (`src/utils/wordCount.test.ts`) covering `htmlToText` (tags, entities, empty) and `countWords` (empty, whitespace, single, multi, punctuation, numbers)
+- `WordCount` component tests (`src/components/WordCount.test.tsx`) covering render, live updates, formatting-tag stripping, and `aria-live="polite"`
+- App-level word-count integration tests in `src/App.test.tsx` covering empty start, live updates on input, and saved-content count on mount
 - Storage utility tests (`src/utils/storage.test.ts`) covering JSON round-trip, fallbacks, silent quota errors, removal, and key isolation
 - `useLocalStorage` hook tests (`src/hooks/useLocalStorage.test.tsx`) covering initial fallback, reads-on-mount, persistence, function updaters, objects, and cross-key isolation
 - App-level autosave integration tests in `src/App.test.tsx` covering typing-persists, remount-restores, Clear-persists-empty, and content/versions key isolation

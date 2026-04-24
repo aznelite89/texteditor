@@ -140,3 +140,44 @@ describe('App — Requirement 4: autosave to localStorage', () => {
     expect(versions === null || versions === JSON.stringify([])).toBe(true);
   });
 });
+
+describe('App — Requirement 5: live word count', () => {
+  beforeEach(() => {
+    clearAppStorage();
+    installExecCommand();
+  });
+
+  afterEach(() => {
+    clearAppStorage();
+    uninstallExecCommand();
+  });
+
+  it('shows 0 words when the editor is empty', () => {
+    render(<App />);
+    expect(screen.getByText(/words:/i).parentElement).toHaveTextContent('0');
+  });
+
+  it('updates the visible count live as the user edits the document', () => {
+    render(<App />);
+    const editor = getEditor();
+    const getCountValue = () =>
+      document.querySelector('.word-count__value')?.textContent;
+
+    editor.innerHTML = '<p>one two three</p>';
+    fireEvent.input(editor);
+    expect(getCountValue()).toBe('3');
+
+    editor.innerHTML = '<p>one two three four five six</p>';
+    fireEvent.input(editor);
+    expect(getCountValue()).toBe('6');
+  });
+
+  it('reflects the saved content count immediately on mount', () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CONTENT,
+      JSON.stringify('<p><strong>alpha</strong> beta gamma delta</p>'),
+    );
+    render(<App />);
+    expect(document.querySelector('.word-count__value')?.textContent).toBe('4');
+  });
+});

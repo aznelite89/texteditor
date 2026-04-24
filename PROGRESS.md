@@ -3,7 +3,7 @@
 Tracks the 9 functional requirements of the text-editor app, phase by phase.
 Each phase adds tests that prove a requirement passes or fails; failing requirements get implemented within the same phase.
 
-Last updated: 2026-04-24 (Phase 3 complete)
+Last updated: 2026-04-24 (Phase 4 complete)
 
 ## Summary
 
@@ -13,7 +13,7 @@ Last updated: 2026-04-24 (Phase 3 complete)
 | 2 | Formatting (bold, italic, color, font size, lists, paragraphs) | 1 | ✅ Passing | 10/10 |
 | 3 | Clear text | 2 | ✅ Passing | 6/6 |
 | 4 | Save to localStorage | 3 | ✅ Passing | 17/17 |
-| 5 | Word count | 4 | 🟡 Implemented, no tests | — |
+| 5 | Word count | 4 | ✅ Passing | 22/22 |
 | 6 | Collaborative editing + remote cursors | 5 | ❌ Not implemented (static avatar shell only) | — |
 | 7 | Version history / revision archive | 6 | 🟡 Implemented, no tests | — |
 | 8 | Review functionality (highlight reviewed text) | 7 | ❌ Not implemented | — |
@@ -71,11 +71,14 @@ Legend: ✅ Passing · 🟡 Implemented-but-untested · ⚠️ Partial · ❌ No
   - App integration: typing into contenteditable persists HTML to `STORAGE_KEYS.CONTENT`; remount restores content (simulated reload); Clear persists empty string; content edits don't touch `STORAGE_KEYS.VERSIONS`.
 
 ## Requirement 5 — Word count
-- **Status**: 🟡 Implemented, no tests
-- **Phase**: 4 (pending)
-- **Test files**: —
-- **Last run**: —
-- **Notes**: `src/utils/wordCount.ts` (`htmlToText` + `countWords`) drives `src/components/WordCount.tsx`.
+- **Status**: ✅ Passing
+- **Phase**: 4
+- **Test files**: `src/utils/wordCount.test.ts`, `src/components/WordCount.test.tsx`, `src/App.test.tsx`
+- **Last run**: 2026-04-24, 22/22 tests passing (13 util + 6 component + 3 App integration)
+- **Notes**:
+  - Util: `htmlToText` strips tags, decodes entities; `countWords` handles empty, whitespace-only, single, multi-whitespace, punctuation, numbers.
+  - Component: renders count, updates on rerender, strips formatting, exposes `aria-live="polite"`, shows "Words:" label.
+  - App integration: starts at 0, updates live as the editor receives input, reflects saved-content count on mount.
 
 ## Requirement 6 — Collaborative editing + remote cursors
 - **Status**: ❌ Not implemented
