@@ -1,0 +1,32 @@
+export const UI_LABEL = {
+  APP_TITLE: 'Text Editor',
+  BOLD: 'B',
+  ITALIC: 'I',
+  CLEAR: 'Clear',
+  SAVE_VERSION: 'Save version',
+  RESTORE: 'Restore',
+  DELETE: 'Delete',
+  WORDS: 'Words',
+  VERSIONS_HEADING: 'Version History',
+  EMPTY_VERSIONS: 'No saved versions yet.',
+  EDITOR_PLACEHOLDER: 'Start typing your document...',
+  COLOR: 'Text color',
+  FONT_SIZE: 'Font size',
+  FONT_SIZE_SMALL: 'Small',
+  FONT_SIZE_NORMAL: 'Normal',
+  FONT_SIZE_LARGE: 'Large',
+  FONT_SIZE_HUGE: 'Huge',
+  BULLET_LIST: 'Bullet list',
+  NUMBERED_LIST: 'Numbered list',
+  BLOCK_FORMAT: 'Paragraph style',
+  BLOCK_PARAGRAPH: 'Paragraph',
+  BLOCK_HEADING_1: 'Heading 1',
+  BLOCK_HEADING_2: 'Heading 2',
+  BLOCK_HEADING_3: 'Heading 3',
+} as const;
+
+export const UI_PROMPT = {
+  CONFIRM_CLEAR: 'Clear all text? This cannot be undone.',
+  ASK_VERSION_NAME: 'Name this version:',
+  CONFIRM_DELETE_VERSION: 'Delete this version?',
+} as const;
