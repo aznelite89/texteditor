@@ -6,6 +6,7 @@ export const COLLAB_MESSAGE = {
   PING: 'ping',
   CARET: 'caret',
   CONTENT: 'content',
+  REVIEWS: 'reviews',
 } as const;
 
 export type CollabMessageType = typeof COLLAB_MESSAGE[keyof typeof COLLAB_MESSAGE];

@@ -3,7 +3,7 @@
 Tracks the 9 functional requirements of the text-editor app, phase by phase.
 Each phase adds tests that prove a requirement passes or fails; failing requirements get implemented within the same phase.
 
-Last updated: 2026-04-24 (Phase 6 complete)
+Last updated: 2026-04-24 (Phase 7 complete)
 
 ## Summary
 
@@ -16,7 +16,7 @@ Last updated: 2026-04-24 (Phase 6 complete)
 | 5 | Word count | 4 | ✅ Passing | 22/22 |
 | 6 | Collaborative editing + remote cursors | 5 | ✅ Passing | 42/42 |
 | 7 | Version history / revision archive | 6 | ✅ Passing | 25/25 |
-| 8 | Review functionality (highlight reviewed text) | 7 | ❌ Not implemented | — |
+| 8 | Review functionality (highlight reviewed text) | 7 | ✅ Passing | 35/35 |
 | 9 | Comments (Word/Docs-style) | 8 | ❌ Not implemented | — |
 
 Legend: ✅ Passing · 🟡 Implemented-but-untested · ⚠️ Partial · ❌ Not implemented
@@ -104,11 +104,17 @@ Legend: ✅ Passing · 🟡 Implemented-but-untested · ⚠️ Partial · ❌ No
   - App integration: end-to-end save (appears in list + persists to localStorage), restore writes into editor DOM, delete with confirmation removes entry + updates storage, cancel skips delete, prompt cancel skips save.
 
 ## Requirement 8 — Review functionality
-- **Status**: ❌ Not implemented
-- **Phase**: 7 (pending — design pass required)
-- **Test files**: —
-- **Last run**: —
-- **Notes**: Needs a data model (ranges + status), a highlight render layer, and a "completed" toggle that makes the marked text visible to others.
+- **Status**: ✅ Passing
+- **Phase**: 7
+- **Test files**: `src/utils/caretOffset.test.ts`, `src/hooks/useReviews.test.tsx`, `src/hooks/useCollab.test.tsx`, `src/components/ReviewHighlights.test.tsx`, `src/components/ReviewList.test.tsx`, `src/App.test.tsx`
+- **Last run**: 2026-04-24, 35/35 new tests passing (5 selectionRangeOffsets + 11 useReviews + 2 useCollab REVIEWS + 4 ReviewHighlights + 7 ReviewList + 6 App integration)
+- **Workflow**: Two-step. Reviewer selects text and clicks "Mark reviewed" in the toolbar → DRAFT highlight (yellow, local only). Clicks "Complete" in the side panel → COMPLETED highlight (green) + broadcast to all peers via the existing BroadcastChannel.
+- **Data model** (`src/constants/review.ts`): `Review = { id, start, end, status: 'draft'|'completed', reviewerId, reviewerName, createdAt, completedAt? }`. Stored in `STORAGE_KEYS.REVIEWS`.
+- **Range capture**: `selectionRangeOffsets(root)` in `src/utils/caretOffset.ts` returns `{start, end}` for the current selection in linear text-offset coordinates.
+- **Hook** (`src/hooks/useReviews.ts`): `markForReview` (collapsed = no-op), `completeReview`, `deleteReview`, `applyRemoteCompleted` (replaces the COMPLETED set, preserves local DRAFTs).
+- **Sync**: New `REVIEWS` collab message in `useCollab` carries the full completed-reviews list. App broadcasts on complete + on delete-of-completed; receivers replace their COMPLETED set via `applyRemoteCompleted`.
+- **UI**: `ReviewHighlights` overlay renders one `<div>` per line rect (yellow draft / green completed, mix-blend-mode: multiply). `ReviewList` side panel shows snippet, badge, Complete (drafts only), and Delete (all) actions.
+- **Test infra**: Added `Range.prototype.getClientRects` polyfill to `src/test/setup.ts` so jsdom doesn't throw when rendering the highlight overlay.
 
 ## Requirement 9 — Comments (Word/Docs-style)
 - **Status**: ❌ Not implemented

@@ -17,6 +17,38 @@ export function textOffsetFromSelection(root: HTMLElement): number | null {
   return pre.toString().length;
 }
 
+export function selectionRangeOffsets(
+  root: HTMLElement,
+): { start: number; end: number } | null {
+  const sel = document.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  const startContainer = range.startContainer;
+  const endContainer = range.endContainer;
+  if (startContainer !== root && !root.contains(startContainer)) return null;
+  if (endContainer !== root && !root.contains(endContainer)) return null;
+
+  const preStart = document.createRange();
+  preStart.selectNodeContents(root);
+  try {
+    preStart.setEnd(startContainer, range.startOffset);
+  } catch {
+    // ignore — fall back to full preselection length
+  }
+  const start = preStart.toString().length;
+
+  const preEnd = document.createRange();
+  preEnd.selectNodeContents(root);
+  try {
+    preEnd.setEnd(endContainer, range.endOffset);
+  } catch {
+    // ignore
+  }
+  const end = preEnd.toString().length;
+
+  return { start, end };
+}
+
 export function nodeAtOffset(
   root: HTMLElement,
   offset: number,

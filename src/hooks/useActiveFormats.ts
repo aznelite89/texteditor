@@ -1,4 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react';
+import { APP_EVENT } from '../constants/events';
 import { FORMAT_COMMAND } from '../constants/formatCommands';
 
 export type ActiveFormats = {
@@ -57,7 +58,11 @@ export function useActiveFormats(
     };
 
     document.addEventListener('selectionchange', read);
-    return () => document.removeEventListener('selectionchange', read);
+    document.addEventListener(APP_EVENT.FORMAT_CHANGE, read);
+    return () => {
+      document.removeEventListener('selectionchange', read);
+      document.removeEventListener(APP_EVENT.FORMAT_CHANGE, read);
+    };
   }, [editorRef]);
 
   return state;

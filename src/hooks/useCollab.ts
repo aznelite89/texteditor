@@ -5,6 +5,7 @@ import {
   COLLAB_TIMING,
   type CollabMessageType,
 } from '../constants/collab';
+import type { Review } from '../constants/review';
 import type { LocalUser } from './useLocalUser';
 
 export type Peer = {
@@ -32,16 +33,20 @@ export type CollabEnvelope =
   | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.LEAVE })
   | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.PING })
   | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.CARET; offset: number })
-  | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.CONTENT; html: string });
+  | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.CONTENT; html: string })
+  | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.REVIEWS; reviews: Review[] });
 
 export type RemoteContentHandler = (html: string, fromUserId: string) => void;
+export type RemoteReviewsHandler = (reviews: Review[], fromUserId: string) => void;
 
 export type UseCollabResult = {
   peers: Peer[];
   remoteCarets: Map<string, RemoteCaret>;
   broadcastCaret: (offset: number) => void;
   broadcastContent: (html: string) => void;
+  broadcastReviews: (reviews: Review[]) => void;
   onRemoteContent: (handler: RemoteContentHandler) => () => void;
+  onRemoteReviews: (handler: RemoteReviewsHandler) => () => void;
 };
 
 function upsertPeer(prev: Peer[], peer: Peer): Peer[] {
@@ -80,6 +85,7 @@ export function useCollab(localUser: LocalUser): UseCollabResult {
   );
   const channelRef = useRef<BroadcastChannel | null>(null);
   const contentSubsRef = useRef<Set<RemoteContentHandler>>(new Set());
+  const reviewsSubsRef = useRef<Set<RemoteReviewsHandler>>(new Set());
 
   useEffect(() => {
     if (typeof BroadcastChannel === 'undefined') return;
@@ -132,6 +138,9 @@ export function useCollab(localUser: LocalUser): UseCollabResult {
       } else if (msg.type === COLLAB_MESSAGE.CONTENT) {
         setPeers((prev) => upsertPeer(prev, seenPeer));
         for (const cb of contentSubsRef.current) cb(msg.html, msg.from);
+      } else if (msg.type === COLLAB_MESSAGE.REVIEWS) {
+        setPeers((prev) => upsertPeer(prev, seenPeer));
+        for (const cb of reviewsSubsRef.current) cb(msg.reviews, msg.from);
       }
     };
 
@@ -195,6 +204,22 @@ export function useCollab(localUser: LocalUser): UseCollabResult {
     [localUser.id, localUser.name, localUser.color],
   );
 
+  const broadcastReviews = useCallback(
+    (reviews: Review[]) => {
+      const ch = channelRef.current;
+      if (!ch) return;
+      ch.postMessage({
+        type: COLLAB_MESSAGE.REVIEWS,
+        from: localUser.id,
+        fromName: localUser.name,
+        fromColor: localUser.color,
+        ts: Date.now(),
+        reviews,
+      } satisfies CollabEnvelope);
+    },
+    [localUser.id, localUser.name, localUser.color],
+  );
+
   const onRemoteContent = useCallback((handler: RemoteContentHandler) => {
     contentSubsRef.current.add(handler);
     return () => {
@@ -202,5 +227,20 @@ export function useCollab(localUser: LocalUser): UseCollabResult {
     };
   }, []);
 
-  return { peers, remoteCarets, broadcastCaret, broadcastContent, onRemoteContent };
+  const onRemoteReviews = useCallback((handler: RemoteReviewsHandler) => {
+    reviewsSubsRef.current.add(handler);
+    return () => {
+      reviewsSubsRef.current.delete(handler);
+    };
+  }, []);
+
+  return {
+    peers,
+    remoteCarets,
+    broadcastCaret,
+    broadcastContent,
+    broadcastReviews,
+    onRemoteContent,
+    onRemoteReviews,
+  };
 }

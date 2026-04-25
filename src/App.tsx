@@ -2,16 +2,21 @@ import { useCallback, useState, useEffect, useRef } from "react"
 import { Editor } from "./components/Editor"
 import { PresenceAvatars } from "./components/PresenceAvatars"
 import { RemoteCursors } from "./components/RemoteCursors"
+import { ReviewHighlights } from "./components/ReviewHighlights"
+import { ReviewList } from "./components/ReviewList"
 import { Toolbar } from "./components/Toolbar"
 import { VersionList } from "./components/VersionList"
 import { WordCount } from "./components/WordCount"
+import { REVIEW_STATUS } from "./constants/review"
 import { STORAGE_KEYS } from "./constants/storageKeys"
 import { UI_LABEL } from "./constants/ui"
 import { useActiveFormats } from "./hooks/useActiveFormats"
 import { useCollab } from "./hooks/useCollab"
 import { useLocalStorage } from "./hooks/useLocalStorage"
 import { useLocalUser } from "./hooks/useLocalUser"
+import { useReviews } from "./hooks/useReviews"
 import { useVersions } from "./hooks/useVersions"
+import { selectionRangeOffsets } from "./utils/caretOffset"
 import "./App.css"
 
 export default function App() {
@@ -24,6 +29,7 @@ export default function App() {
   const activeFormats = useActiveFormats(editorRef)
   const localUser = useLocalUser()
   const collab = useCollab(localUser)
+  const reviewsApi = useReviews(localUser)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle")
   const [showSavedToast, setShowSavedToast] = useState(false)
 
@@ -53,12 +59,55 @@ export default function App() {
     [setContent, collab],
   )
 
+  const handleMarkReview = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    const range = selectionRangeOffsets(editor)
+    if (!range) return
+    reviewsApi.markForReview(range.start, range.end)
+  }, [reviewsApi])
+
+  const handleCompleteReview = useCallback(
+    (id: string) => {
+      reviewsApi.completeReview(id)
+      const completedAfter = reviewsApi.reviews
+        .map((r) =>
+          r.id === id
+            ? { ...r, status: REVIEW_STATUS.COMPLETED, completedAt: Date.now() }
+            : r,
+        )
+        .filter((r) => r.status === REVIEW_STATUS.COMPLETED)
+      collab.broadcastReviews(completedAfter)
+    },
+    [reviewsApi, collab],
+  )
+
+  const handleDeleteReview = useCallback(
+    (id: string) => {
+      const review = reviewsApi.reviews.find((r) => r.id === id)
+      reviewsApi.deleteReview(id)
+      if (review?.status === REVIEW_STATUS.COMPLETED) {
+        const completedAfter = reviewsApi.reviews
+          .filter((r) => r.id !== id && r.status === REVIEW_STATUS.COMPLETED)
+        collab.broadcastReviews(completedAfter)
+      }
+    },
+    [reviewsApi, collab],
+  )
+
   // Apply remote content updates from peers.
   useEffect(() => {
     return collab.onRemoteContent((html) => {
       setContent(html)
     })
   }, [collab, setContent])
+
+  // Apply remote review updates (completed reviews) from peers.
+  useEffect(() => {
+    return collab.onRemoteReviews((incoming) => {
+      reviewsApi.applyRemoteCompleted(incoming)
+    })
+  }, [collab, reviewsApi])
 
   // Show "All changes saved" toast 1.5s after the user stops typing
   useEffect(() => {
@@ -104,6 +153,7 @@ export default function App() {
             onClear={clear}
             activeFormats={activeFormats}
             editorRef={editorRef}
+            onMarkReview={handleMarkReview}
           />
           <div className="editor-wrapper">
             <Editor
@@ -111,6 +161,11 @@ export default function App() {
               content={content}
               onChange={handleLocalChange}
               onCaretChange={handleCaretChange}
+            />
+            <ReviewHighlights
+              editorRef={editorRef}
+              reviews={reviewsApi.reviews}
+              content={content}
             />
             <RemoteCursors
               editorRef={editorRef}
@@ -121,13 +176,22 @@ export default function App() {
             <WordCount content={content} />
           </div>
         </section>
-        <VersionList
-          versions={versions}
-          currentContent={content}
-          onSave={saveVersion}
-          onRestore={restore}
-          onDelete={deleteVersion}
-        />
+        <aside className="app__side">
+          <ReviewList
+            reviews={reviewsApi.reviews}
+            content={content}
+            onComplete={handleCompleteReview}
+            onDelete={handleDeleteReview}
+          />
+          <VersionList
+            versions={versions}
+            currentContent={content}
+            onSave={saveVersion}
+            onRestore={restore}
+            onDelete={deleteVersion}
+          />
+          <p className="app__hint" data-testid="review-hint">{UI_LABEL.REVIEW_HINT}</p>
+        </aside>
       </main>
     </div>
   )

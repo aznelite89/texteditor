@@ -6,6 +6,14 @@
 - Remote cursor now appears on click (not only on typing): caret offset broadcasts on `mouseup`/`keyup`/`focus` in addition to `selectionchange`; `textOffsetFromSelection` handles root-as-anchor selections; `RemoteCursors` falls back to `getClientRects()` then the parent element rect when `getBoundingClientRect()` is all zeros (`src/utils/caretOffset.ts`, `src/components/Editor.tsx`, `src/components/RemoteCursors.tsx`)
 
 ### Added
+- Review functionality: two-step workflow (Mark reviewed → Complete) with yellow draft / green completed highlights, side panel listing reviews with Complete + Delete, and live sync of completed reviews across peers over BroadcastChannel
+- `Review` data model + `REVIEW_STATUS` enum in `src/constants/review.ts`; `STORAGE_KEYS.REVIEWS`; `COLLAB_MESSAGE.REVIEWS` envelope
+- `useReviews` hook (`src/hooks/useReviews.ts`) with markForReview / completeReview / deleteReview / applyRemoteCompleted
+- `selectionRangeOffsets` helper in `src/utils/caretOffset.ts` for capturing the current selection as `{start, end}` text offsets
+- `ReviewHighlights` overlay (`src/components/ReviewHighlights.tsx`) and `ReviewList` side panel (`src/components/ReviewList.tsx`)
+- Toolbar "Mark reviewed" button (renders only when `onMarkReview` is provided) in `src/components/Toolbar.tsx`
+- Phase 7 tests: 5 selectionRangeOffsets, 11 useReviews, 2 useCollab REVIEWS protocol, 4 ReviewHighlights, 7 ReviewList, 6 App integration
+- `Range.prototype.getClientRects` polyfill in `src/test/setup.ts` (jsdom doesn't implement it; required by the highlight overlay)
 - `useVersions` hook tests (`src/hooks/useVersions.test.tsx`) covering save/delete/getVersion, name trimming, newest-first ordering, persistence, hydration, and unique ids
 - `VersionList` component tests (`src/components/VersionList.test.tsx`) covering empty state, list rendering, save/cancel flows, restore, and delete with confirmation
 - App-level version-history integration tests in `src/App.test.tsx` covering save → list + storage, restore into editor, delete with confirmation, cancel paths

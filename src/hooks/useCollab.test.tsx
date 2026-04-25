@@ -4,6 +4,7 @@ import {
   COLLAB_CHANNEL,
   COLLAB_MESSAGE,
 } from '../constants/collab';
+import { REVIEW_STATUS, type Review } from '../constants/review';
 import { useCollab, type CollabEnvelope } from './useCollab';
 import type { LocalUser } from './useLocalUser';
 
@@ -219,6 +220,74 @@ describe('useCollab — Requirement 6: collab message protocol', () => {
       expect(content.html).toBe('<p>hello</p>');
       expect(content.from).toBe(LOCAL.id);
     }
+  });
+
+  it('broadcastReviews posts a REVIEWS message with the list', async () => {
+    const received: CollabEnvelope[] = [];
+    externalChannel.addEventListener('message', (e) => received.push(e.data));
+
+    const { result } = renderHook(() => useCollab(LOCAL));
+    await flush();
+    received.length = 0;
+
+    const list: Review[] = [
+      {
+        id: 'rev-1',
+        start: 0,
+        end: 5,
+        status: REVIEW_STATUS.COMPLETED,
+        reviewerId: LOCAL.id,
+        reviewerName: LOCAL.name,
+        createdAt: 1,
+        completedAt: 2,
+      },
+    ];
+
+    act(() => {
+      result.current.broadcastReviews(list);
+    });
+    await flush();
+
+    const envelope = received.find((m) => m.type === COLLAB_MESSAGE.REVIEWS);
+    expect(envelope).toBeDefined();
+    if (envelope?.type === COLLAB_MESSAGE.REVIEWS) {
+      expect(envelope.reviews).toEqual(list);
+      expect(envelope.from).toBe(LOCAL.id);
+    }
+  });
+
+  it('invokes onRemoteReviews subscribers when a remote REVIEWS message arrives', async () => {
+    const { result } = renderHook(() => useCollab(LOCAL));
+    await flush();
+
+    const handler = vi.fn();
+    let unsubscribe = () => {};
+    act(() => {
+      unsubscribe = result.current.onRemoteReviews(handler);
+    });
+
+    const incoming: Review[] = [
+      {
+        id: 'remote-1',
+        start: 10,
+        end: 12,
+        status: REVIEW_STATUS.COMPLETED,
+        reviewerId: PEER_USER.id,
+        reviewerName: PEER_USER.name,
+        createdAt: 1,
+        completedAt: 2,
+      },
+    ];
+
+    await act(async () => {
+      externalChannel.postMessage(makePeerEnvelope(COLLAB_MESSAGE.REVIEWS, { reviews: incoming }));
+      await flush();
+    });
+
+    await waitFor(() => {
+      expect(handler).toHaveBeenCalledWith(incoming, PEER_USER.id);
+    });
+    unsubscribe();
   });
 
   it('ignores envelopes from itself (no echo loop)', async () => {

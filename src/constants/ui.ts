@@ -23,10 +23,19 @@ export const UI_LABEL = {
   BLOCK_HEADING_1: 'Heading 1',
   BLOCK_HEADING_2: 'Heading 2',
   BLOCK_HEADING_3: 'Heading 3',
+  MARK_REVIEWED: 'Mark reviewed',
+  COMPLETE_REVIEW: 'Complete',
+  DELETE_REVIEW: 'Delete',
+  REVIEWS_HEADING: 'Reviews',
+  EMPTY_REVIEWS: 'No reviews yet.',
+  REVIEW_DRAFT_BADGE: 'Draft',
+  REVIEW_COMPLETED_BADGE: 'Completed',
+  REVIEW_HINT: 'Tip: select text in the editor, then click the Review button in the toolbar to request a review.',
 } as const;
 
 export const UI_PROMPT = {
   CONFIRM_CLEAR: 'Clear all text? This cannot be undone.',
   ASK_VERSION_NAME: 'Name this version:',
   CONFIRM_DELETE_VERSION: 'Delete this version?',
+  CONFIRM_DELETE_REVIEW: 'Delete this review highlight?',
 } as const;

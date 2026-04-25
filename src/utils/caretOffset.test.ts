@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nodeAtOffset, textOffsetFromSelection } from './caretOffset';
+import { nodeAtOffset, selectionRangeOffsets, textOffsetFromSelection } from './caretOffset';
 
 function makeRoot(html: string): HTMLDivElement {
   const div = document.createElement('div');
@@ -106,5 +106,75 @@ describe('caretOffset — Requirement 6: caret offsets', () => {
     const root = makeRoot('');
     expect(nodeAtOffset(root, 0)).toBeNull();
     root.remove();
+  });
+});
+
+describe('selectionRangeOffsets — Requirement 8: capture selected range', () => {
+  it('returns null when no selection exists', () => {
+    const root = makeRoot('<p>hello</p>');
+    document.getSelection()?.removeAllRanges();
+    expect(selectionRangeOffsets(root)).toBeNull();
+    root.remove();
+  });
+
+  it('returns {start, end} for a selection that spans characters within one text node', () => {
+    const root = makeRoot('<p>hello world</p>');
+    const text = root.querySelector('p')!.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(text, 5);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    expect(selectionRangeOffsets(root)).toEqual({ start: 0, end: 5 });
+    root.remove();
+  });
+
+  it('returns equal start/end for a collapsed selection (cursor)', () => {
+    const root = makeRoot('<p>hello</p>');
+    const text = root.querySelector('p')!.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(text, 3);
+    range.setEnd(text, 3);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    expect(selectionRangeOffsets(root)).toEqual({ start: 3, end: 3 });
+    root.remove();
+  });
+
+  it('sums offsets across multiple text nodes when the selection spans them', () => {
+    const root = makeRoot('<p><strong>abc</strong>defg</p>');
+    const startText = root.querySelector('strong')!.firstChild as Text;
+    const endText = root.querySelector('p')!.lastChild as Text;
+    const range = document.createRange();
+    range.setStart(startText, 1);
+    range.setEnd(endText, 2);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    // start: 'a' before offset 1 in 'abc' → 1
+    // end: 'abc' (3) + 'de' before offset 2 in 'defg' → 5
+    expect(selectionRangeOffsets(root)).toEqual({ start: 1, end: 5 });
+    root.remove();
+  });
+
+  it('returns null when the selection sits outside the root', () => {
+    const root = makeRoot('<p>inside</p>');
+    const outside = makeRoot('<p>outside text</p>');
+    const text = outside.querySelector('p')!.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(text, 1);
+    range.setEnd(text, 4);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    expect(selectionRangeOffsets(root)).toBeNull();
+    root.remove();
+    outside.remove();
   });
 });

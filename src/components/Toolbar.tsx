@@ -1,4 +1,5 @@
 import type { ChangeEvent, RefObject } from 'react';
+import { APP_EVENT } from '../constants/events';
 import {
   BLOCK_FORMAT,
   DEFAULT_TEXT_COLOR,
@@ -11,13 +12,22 @@ import type { ActiveFormats } from '../hooks/useActiveFormats';
 import { useSavedSelection } from '../hooks/useSavedSelection';
 import { applyFormat } from '../utils/formatCommand';
 
+function notifyFormatChange() {
+  // Defer one tick so execCommand has fully updated queryCommandState before
+  // useActiveFormats re-reads it.
+  queueMicrotask(() => {
+    document.dispatchEvent(new Event(APP_EVENT.FORMAT_CHANGE));
+  });
+}
+
 type ToolbarProps = {
   onClear: () => void;
   activeFormats: ActiveFormats;
   editorRef: RefObject<HTMLDivElement | null>;
+  onMarkReview?: () => void;
 };
 
-export function Toolbar({ onClear, activeFormats, editorRef }: ToolbarProps) {
+export function Toolbar({ onClear, activeFormats, editorRef, onMarkReview }: ToolbarProps) {
   const withSelection = useSavedSelection(editorRef);
 
   const handleClear = () => {
@@ -26,17 +36,22 @@ export function Toolbar({ onClear, activeFormats, editorRef }: ToolbarProps) {
     }
   };
 
-  const toggle = (cmd: FormatCommand) => applyFormat(cmd);
+  const toggle = (cmd: FormatCommand) => {
+    applyFormat(cmd);
+    notifyFormatChange();
+  };
 
   const handleColor = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     withSelection(() => applyFormat(FORMAT_COMMAND.FORE_COLOR, value));
+    notifyFormatChange();
   };
 
   const handleFontSize = (e: ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
     if (!value) return;
     withSelection(() => applyFormat(FORMAT_COMMAND.FONT_SIZE, value));
+    notifyFormatChange();
     e.currentTarget.value = '';
   };
 
@@ -44,6 +59,7 @@ export function Toolbar({ onClear, activeFormats, editorRef }: ToolbarProps) {
     const value = e.target.value;
     if (!value) return;
     withSelection(() => applyFormat(FORMAT_COMMAND.FORMAT_BLOCK, value));
+    notifyFormatChange();
     e.currentTarget.value = '';
   };
 
@@ -169,6 +185,26 @@ export function Toolbar({ onClear, activeFormats, editorRef }: ToolbarProps) {
           <option value={BLOCK_FORMAT.HEADING_3}>{UI_LABEL.BLOCK_HEADING_3}</option>
         </select>
       </div>
+
+      {onMarkReview && (
+        <div className="toolbar__group">
+          <button
+            type="button"
+            className="toolbar__btn toolbar__btn--review"
+            aria-label={UI_LABEL.MARK_REVIEWED}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              onMarkReview();
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 12l2 2 4-4"/>
+              <circle cx="12" cy="12" r="10"/>
+            </svg>
+            <span className="toolbar__hint">{UI_LABEL.MARK_REVIEWED}</span>
+          </button>
+        </div>
+      )}
 
       <span className="toolbar__spacer" />
       <button

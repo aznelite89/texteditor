@@ -6,6 +6,7 @@ import {
   COLLAB_MESSAGE,
   SESSION_KEYS,
 } from './constants/collab';
+import { REVIEW_STATUS, type Review } from './constants/review';
 import { STORAGE_KEYS } from './constants/storageKeys';
 import { UI_LABEL } from './constants/ui';
 import type { CollabEnvelope } from './hooks/useCollab';
@@ -442,6 +443,221 @@ describe('App — Requirement 7: version history end-to-end', () => {
     // important assertion is that no entries were appended.
     const raw = window.localStorage.getItem(STORAGE_KEYS.VERSIONS);
     expect(raw === null || raw === JSON.stringify([])).toBe(true);
+  });
+});
+
+describe('App — Requirement 8: review highlighting end-to-end', () => {
+  let externalChannel: BroadcastChannel | null = null;
+  let confirmSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    clearAppStorage();
+    installExecCommand();
+    confirmSpy = vi.spyOn(window, 'confirm');
+  });
+
+  afterEach(() => {
+    externalChannel?.close();
+    externalChannel = null;
+    confirmSpy.mockRestore();
+    clearAppStorage();
+    uninstallExecCommand();
+  });
+
+  function selectRangeInEditor(editor: HTMLElement, start: number, end: number) {
+    const text = editor.querySelector('p')!.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, end);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  it('clicking Mark reviewed creates a DRAFT review with the local user', () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CONTENT,
+      JSON.stringify('<p>hello world</p>'),
+    );
+    render(<App />);
+    const editor = getEditor();
+    selectRangeInEditor(editor, 0, 5);
+
+    fireEvent.mouseDown(screen.getByRole('button', { name: UI_LABEL.MARK_REVIEWED }));
+
+    const raw = window.localStorage.getItem(STORAGE_KEYS.REVIEWS);
+    expect(raw).not.toBeNull();
+    const stored = JSON.parse(raw as string) as Review[];
+    expect(stored).toHaveLength(1);
+    expect(stored[0].status).toBe(REVIEW_STATUS.DRAFT);
+    expect(stored[0].start).toBe(0);
+    expect(stored[0].end).toBe(5);
+  });
+
+  it('clicking Mark reviewed with a collapsed selection does NOT create a review', () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CONTENT,
+      JSON.stringify('<p>hello</p>'),
+    );
+    render(<App />);
+    const editor = getEditor();
+    selectRangeInEditor(editor, 2, 2);
+
+    fireEvent.mouseDown(screen.getByRole('button', { name: UI_LABEL.MARK_REVIEWED }));
+
+    const raw = window.localStorage.getItem(STORAGE_KEYS.REVIEWS);
+    const stored = raw ? (JSON.parse(raw) as Review[]) : [];
+    expect(stored).toHaveLength(0);
+  });
+
+  it('Complete flips a draft to COMPLETED and broadcasts a REVIEWS message', async () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CONTENT,
+      JSON.stringify('<p>hello world</p>'),
+    );
+    const seeded: Review[] = [
+      {
+        id: 'draft-1',
+        start: 0,
+        end: 5,
+        status: REVIEW_STATUS.DRAFT,
+        reviewerId: 'me',
+        reviewerName: 'Mia',
+        createdAt: 1,
+      },
+    ];
+    window.localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(seeded));
+
+    externalChannel = new BroadcastChannel(COLLAB_CHANNEL);
+    const received: CollabEnvelope[] = [];
+    externalChannel.addEventListener('message', (e) => received.push(e.data));
+
+    render(<App />);
+    await flush();
+    received.length = 0;
+
+    fireEvent.click(screen.getByRole('button', { name: UI_LABEL.COMPLETE_REVIEW }));
+    await flush();
+
+    // Local state flipped to completed badge
+    expect(screen.getByTestId('review-item-draft-1')).toHaveAttribute(
+      'data-review-status',
+      REVIEW_STATUS.COMPLETED,
+    );
+
+    await waitFor(() => {
+      const env = received.find((m) => m.type === COLLAB_MESSAGE.REVIEWS);
+      expect(env).toBeDefined();
+    });
+    const env = received.find((m) => m.type === COLLAB_MESSAGE.REVIEWS);
+    if (env?.type === COLLAB_MESSAGE.REVIEWS) {
+      expect(env.reviews).toHaveLength(1);
+      expect(env.reviews[0].id).toBe('draft-1');
+      expect(env.reviews[0].status).toBe(REVIEW_STATUS.COMPLETED);
+    }
+  });
+
+  it('renders a review highlight overlay for a stored review', () => {
+    // jsdom returns zero rects by default; the component skips zero rects.
+    // Temporarily stub a non-zero rect so the highlight branch is exercised.
+    const previousRects = Range.prototype.getClientRects;
+    Range.prototype.getClientRects = function () {
+      const r = {
+        x: 10, y: 20, width: 60, height: 18, top: 20, left: 10, right: 70, bottom: 38,
+        toJSON: () => ({}),
+      } as DOMRect;
+      const list = [r] as unknown as DOMRectList;
+      (list as unknown as { length: number }).length = 1;
+      return list;
+    };
+
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEYS.CONTENT,
+        JSON.stringify('<p>hello world</p>'),
+      );
+      const seeded: Review[] = [
+        {
+          id: 'visible',
+          start: 0,
+          end: 5,
+          status: REVIEW_STATUS.DRAFT,
+          reviewerId: 'me',
+          reviewerName: 'Mia',
+          createdAt: 1,
+        },
+      ];
+      window.localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(seeded));
+
+      const { container } = render(<App />);
+      expect(container.querySelector('[data-testid="review-highlight-visible"]')).not.toBeNull();
+    } finally {
+      Range.prototype.getClientRects = previousRects;
+    }
+  });
+
+  it('applies a remote REVIEWS message: peer-published completed reviews appear locally', async () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CONTENT,
+      JSON.stringify('<p>hello world</p>'),
+    );
+    render(<App />);
+    externalChannel = new BroadcastChannel(COLLAB_CHANNEL);
+
+    const incoming: Review[] = [
+      {
+        id: 'peer-rev',
+        start: 6,
+        end: 11,
+        status: REVIEW_STATUS.COMPLETED,
+        reviewerId: 'peer-id',
+        reviewerName: 'Peer',
+        createdAt: 1,
+        completedAt: 2,
+      },
+    ];
+    externalChannel.postMessage({
+      type: COLLAB_MESSAGE.REVIEWS,
+      from: 'peer-id',
+      fromName: 'Peer',
+      fromColor: '#10b981',
+      ts: Date.now(),
+      reviews: incoming,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('review-item-peer-rev')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('review-item-peer-rev')).toHaveAttribute(
+      'data-review-status',
+      REVIEW_STATUS.COMPLETED,
+    );
+  });
+
+  it('deletes a review after confirmation and persists the removal', () => {
+    const seeded: Review[] = [
+      {
+        id: 'to-delete',
+        start: 0,
+        end: 4,
+        status: REVIEW_STATUS.DRAFT,
+        reviewerId: 'me',
+        reviewerName: 'Mia',
+        createdAt: 1,
+      },
+    ];
+    window.localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(seeded));
+    confirmSpy.mockReturnValue(true);
+
+    render(<App />);
+    expect(screen.getByTestId('review-item-to-delete')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: UI_LABEL.DELETE_REVIEW }));
+
+    expect(screen.queryByTestId('review-item-to-delete')).toBeNull();
+    const raw = window.localStorage.getItem(STORAGE_KEYS.REVIEWS);
+    const stored = raw ? (JSON.parse(raw) as Review[]) : [];
+    expect(stored).toHaveLength(0);
   });
 });
 

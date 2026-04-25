@@ -63,6 +63,17 @@ if (typeof window.sessionStorage.setItem !== 'function') {
   });
 }
 
+// jsdom does not implement Range.prototype.getClientRects. RemoteCursors and
+// ReviewHighlights call it as a fallback when getBoundingClientRect is zero;
+// without this stub the call throws and breaks any render that exercises them.
+if (typeof Range.prototype.getClientRects !== 'function') {
+  Range.prototype.getClientRects = function () {
+    const list = [] as unknown as DOMRectList;
+    (list as unknown as { length: number }).length = 0;
+    return list;
+  };
+}
+
 // In-process BroadcastChannel polyfill. Node's built-in BroadcastChannel only
 // crosses Worker boundaries; jsdom doesn't expose one. Tests need cross-instance
 // delivery within the same realm to verify the collab protocol.
