@@ -9,6 +9,7 @@ import {
 import { STORAGE_KEYS } from './constants/storageKeys';
 import { UI_LABEL } from './constants/ui';
 import type { CollabEnvelope } from './hooks/useCollab';
+import type { Version } from './hooks/useVersions';
 
 const getEditor = () => screen.getByRole('textbox', { name: UI_LABEL.APP_TITLE });
 
@@ -314,6 +315,149 @@ describe('App — Requirement 6: collaborative editing + presence', () => {
 
     const join = received.find((m) => m.type === COLLAB_MESSAGE.JOIN);
     expect(join).toBeDefined();
+  });
+
+});
+
+describe('App — Requirement 7: version history end-to-end', () => {
+  let promptSpy: ReturnType<typeof vi.spyOn>;
+  let confirmSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    clearAppStorage();
+    installExecCommand();
+    promptSpy = vi.spyOn(window, 'prompt');
+    confirmSpy = vi.spyOn(window, 'confirm');
+  });
+
+  afterEach(() => {
+    promptSpy.mockRestore();
+    confirmSpy.mockRestore();
+    clearAppStorage();
+    uninstallExecCommand();
+  });
+
+  it('saves the current editor content as a named version that appears in the list', () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CONTENT,
+      JSON.stringify('<p>snapshot body</p>'),
+    );
+    promptSpy.mockReturnValue('Draft v1');
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: UI_LABEL.SAVE_VERSION }));
+
+    expect(promptSpy).toHaveBeenCalled();
+    expect(screen.getByText('Draft v1')).toBeInTheDocument();
+  });
+
+  it('persists the saved version to STORAGE_KEYS.VERSIONS', () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CONTENT,
+      JSON.stringify('<p>persisted</p>'),
+    );
+    promptSpy.mockReturnValue('Saved');
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: UI_LABEL.SAVE_VERSION }));
+
+    const raw = window.localStorage.getItem(STORAGE_KEYS.VERSIONS);
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw as string) as Version[];
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].name).toBe('Saved');
+    expect(parsed[0].content).toBe('<p>persisted</p>');
+  });
+
+  it('restores a saved version into the editor', () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CONTENT,
+      JSON.stringify('<p>now editing</p>'),
+    );
+    const seeded: Version[] = [
+      { id: 'old', name: 'Old draft', content: '<p>restored draft</p>', createdAt: 1 },
+    ];
+    window.localStorage.setItem(STORAGE_KEYS.VERSIONS, JSON.stringify(seeded));
+
+    render(<App />);
+    expect(getEditor()).toHaveTextContent('now editing');
+
+    fireEvent.click(screen.getByRole('button', { name: UI_LABEL.RESTORE }));
+
+    expect(getEditor()).toHaveTextContent('restored draft');
+    expect(getEditor().innerHTML).toBe('<p>restored draft</p>');
+  });
+
+  it('deletes a version after confirmation', () => {
+    const seeded: Version[] = [
+      { id: 'a', name: 'Keep', content: 'k', createdAt: 1 },
+      { id: 'b', name: 'Drop', content: 'd', createdAt: 2 },
+    ];
+    window.localStorage.setItem(STORAGE_KEYS.VERSIONS, JSON.stringify(seeded));
+    confirmSpy.mockReturnValue(true);
+
+    render(<App />);
+    expect(screen.getByText('Drop')).toBeInTheDocument();
+
+    // The first Delete button (newest-first ordering puts 'Drop' on top after re-sort,
+    // but localStorage seeding preserves array order — find by row context).
+    const dropRow = screen.getByText('Drop').closest('li')!;
+    const deleteBtn = dropRow.querySelector('button:last-child')!;
+    fireEvent.click(deleteBtn);
+
+    expect(screen.queryByText('Drop')).toBeNull();
+    expect(screen.getByText('Keep')).toBeInTheDocument();
+
+    const raw = window.localStorage.getItem(STORAGE_KEYS.VERSIONS);
+    const parsed = JSON.parse(raw as string) as Version[];
+    expect(parsed.map((p) => p.name)).toEqual(['Keep']);
+  });
+
+  it('skips delete when the user cancels the confirmation', () => {
+    const seeded: Version[] = [
+      { id: 'a', name: 'Stay', content: 's', createdAt: 1 },
+    ];
+    window.localStorage.setItem(STORAGE_KEYS.VERSIONS, JSON.stringify(seeded));
+    confirmSpy.mockReturnValue(false);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: UI_LABEL.DELETE }));
+
+    expect(screen.getByText('Stay')).toBeInTheDocument();
+  });
+
+  it('cancelling the save prompt does not create a version', () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CONTENT,
+      JSON.stringify('<p>x</p>'),
+    );
+    promptSpy.mockReturnValue(null);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: UI_LABEL.SAVE_VERSION }));
+
+    expect(screen.getByText(/no versions yet/i)).toBeInTheDocument();
+    // useLocalStorage hydrates the key to its empty initial on mount; the
+    // important assertion is that no entries were appended.
+    const raw = window.localStorage.getItem(STORAGE_KEYS.VERSIONS);
+    expect(raw === null || raw === JSON.stringify([])).toBe(true);
+  });
+});
+
+describe('App — Requirement 6 (collab) — additional', () => {
+  let externalChannel: BroadcastChannel | null = null;
+
+  beforeEach(() => {
+    clearAppStorage();
+    installExecCommand();
+  });
+
+  afterEach(() => {
+    externalChannel?.close();
+    externalChannel = null;
+    clearAppStorage();
+    uninstallExecCommand();
   });
 
   it('broadcasts a CARET message when the user clicks (mouseup) inside the editor', async () => {

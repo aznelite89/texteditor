@@ -3,7 +3,7 @@
 Tracks the 9 functional requirements of the text-editor app, phase by phase.
 Each phase adds tests that prove a requirement passes or fails; failing requirements get implemented within the same phase.
 
-Last updated: 2026-04-24 (Phase 5 complete)
+Last updated: 2026-04-24 (Phase 6 complete)
 
 ## Summary
 
@@ -15,7 +15,7 @@ Last updated: 2026-04-24 (Phase 5 complete)
 | 4 | Save to localStorage | 3 | ✅ Passing | 17/17 |
 | 5 | Word count | 4 | ✅ Passing | 22/22 |
 | 6 | Collaborative editing + remote cursors | 5 | ✅ Passing | 42/42 |
-| 7 | Version history / revision archive | 6 | 🟡 Implemented, no tests | — |
+| 7 | Version history / revision archive | 6 | ✅ Passing | 25/25 |
 | 8 | Review functionality (highlight reviewed text) | 7 | ❌ Not implemented | — |
 | 9 | Comments (Word/Docs-style) | 8 | ❌ Not implemented | — |
 
@@ -94,11 +94,14 @@ Legend: ✅ Passing · 🟡 Implemented-but-untested · ⚠️ Partial · ❌ No
 - **Bugfix (2026-04-24)**: Remote cursor wasn't appearing on click — only on type. Three fixes: (a) `textOffsetFromSelection` no longer returns `null` when the selection's `endContainer` is the contenteditable root itself; (b) Editor now also broadcasts the caret on `mouseup`/`keyup`/`focus` (deferred to next microtask) since `selectionchange` doesn't always fire on click; (c) `RemoteCursors` falls back to `range.getClientRects()[0]`, then to the parent element's rect, before silently dropping a cursor. Six new regression tests added.
 
 ## Requirement 7 — Version history / revision archive
-- **Status**: 🟡 Implemented, no tests
-- **Phase**: 6 (pending)
-- **Test files**: —
-- **Last run**: —
-- **Notes**: `src/hooks/useVersions.ts` manages `{id, name, content, createdAt}`; UI in `src/components/VersionList.tsx`. No diff/compare view.
+- **Status**: ✅ Passing
+- **Phase**: 6
+- **Test files**: `src/hooks/useVersions.test.tsx`, `src/components/VersionList.test.tsx`, `src/App.test.tsx`
+- **Last run**: 2026-04-24, 25/25 tests passing (10 hook + 9 component + 6 App integration)
+- **Notes**:
+  - Hook: empty start, save adds `{id, name, content, createdAt}`, name trim + `Untitled` fallback, newest-first ordering, delete by id, no-op on unknown id, `getVersion` lookup, persistence to `STORAGE_KEYS.VERSIONS`, hydration from existing storage, unique ids across rapid saves.
+  - Component: heading + empty state, list rendering, save flow uses `window.prompt` with `UI_PROMPT.ASK_VERSION_NAME` and forwards `(name, currentContent)`, prompt cancel skips save, empty string still calls `onSave` (hook trims), restore forwards content, delete confirms via `UI_PROMPT.CONFIRM_DELETE_VERSION`, cancel skips delete, "Untitled" fallback render.
+  - App integration: end-to-end save (appears in list + persists to localStorage), restore writes into editor DOM, delete with confirmation removes entry + updates storage, cancel skips delete, prompt cancel skips save.
 
 ## Requirement 8 — Review functionality
 - **Status**: ❌ Not implemented

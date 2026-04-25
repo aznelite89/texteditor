@@ -6,6 +6,9 @@
 - Remote cursor now appears on click (not only on typing): caret offset broadcasts on `mouseup`/`keyup`/`focus` in addition to `selectionchange`; `textOffsetFromSelection` handles root-as-anchor selections; `RemoteCursors` falls back to `getClientRects()` then the parent element rect when `getBoundingClientRect()` is all zeros (`src/utils/caretOffset.ts`, `src/components/Editor.tsx`, `src/components/RemoteCursors.tsx`)
 
 ### Added
+- `useVersions` hook tests (`src/hooks/useVersions.test.tsx`) covering save/delete/getVersion, name trimming, newest-first ordering, persistence, hydration, and unique ids
+- `VersionList` component tests (`src/components/VersionList.test.tsx`) covering empty state, list rendering, save/cancel flows, restore, and delete with confirmation
+- App-level version-history integration tests in `src/App.test.tsx` covering save → list + storage, restore into editor, delete with confirmation, cancel paths
 - Real-time collaborative editing over `BroadcastChannel('quiz.collab.v1')`: same-browser-tab presence, content sync, and remote cursors (`src/hooks/useCollab.ts`, `src/constants/collab.ts`)
 - Per-tab user identity hook with stable id/name/color persisted in sessionStorage (`src/hooks/useLocalUser.ts`, `src/utils/userId.ts`, `src/utils/userColor.ts`, `src/utils/sessionStore.ts`)
 - Caret-offset utilities: linear text offset from a Selection, and inverse lookup of a text node at a given offset (`src/utils/caretOffset.ts`)
