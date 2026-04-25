@@ -3,7 +3,7 @@
 Tracks the 9 functional requirements of the text-editor app, phase by phase.
 Each phase adds tests that prove a requirement passes or fails; failing requirements get implemented within the same phase.
 
-Last updated: 2026-04-24 (Phase 7 complete)
+Last updated: 2026-04-24 (Phase 8 complete — all requirements ✅)
 
 ## Summary
 
@@ -17,7 +17,7 @@ Last updated: 2026-04-24 (Phase 7 complete)
 | 6 | Collaborative editing + remote cursors | 5 | ✅ Passing | 42/42 |
 | 7 | Version history / revision archive | 6 | ✅ Passing | 25/25 |
 | 8 | Review functionality (highlight reviewed text) | 7 | ✅ Passing | 35/35 |
-| 9 | Comments (Word/Docs-style) | 8 | ❌ Not implemented | — |
+| 9 | Comments (Word/Docs-style) | 8 | ✅ Passing | 34/34 |
 
 Legend: ✅ Passing · 🟡 Implemented-but-untested · ⚠️ Partial · ❌ Not implemented
 
@@ -116,9 +116,14 @@ Legend: ✅ Passing · 🟡 Implemented-but-untested · ⚠️ Partial · ❌ No
 - **UI**: `ReviewHighlights` overlay renders one `<div>` per line rect (yellow draft / green completed, mix-blend-mode: multiply). `ReviewList` side panel shows snippet, badge, Complete (drafts only), and Delete (all) actions.
 - **Test infra**: Added `Range.prototype.getClientRects` polyfill to `src/test/setup.ts` so jsdom doesn't throw when rendering the highlight overlay.
 
-## Requirement 9 — Comments (Word/Docs-style)
-- **Status**: ❌ Not implemented
-- **Phase**: 8 (pending — design pass required)
-- **Test files**: —
-- **Last run**: —
-- **Notes**: Needs anchored-range comments, thread UI overlay, and persistence. Will be the largest single phase alongside Phase 5.
+## Requirement 9 — Comments (Word/Docs-style) — DONE
+- **Status**: ✅ Passing
+- **Phase**: 8
+- **Test files**: `src/hooks/useComments.test.tsx`, `src/hooks/useCollab.test.tsx`, `src/components/CommentHighlights.test.tsx`, `src/components/CommentList.test.tsx`, `src/App.test.tsx`
+- **Last run**: 2026-04-24, 34/34 new tests passing (11 useComments + 2 useCollab COMMENTS + 4 CommentHighlights + 9 CommentList + 8 App integration)
+- **Workflow**: Select text → toolbar Comment button → `window.prompt(UI_PROMPT.ASK_COMMENT_BODY)` → comment created and broadcast to all peers. Each comment supports threaded replies, a Resolve/Reopen toggle, and Delete (with confirmation). Resolved comments dim and switch their highlight to a dashed gray underline.
+- **Data model** (`src/constants/comments.ts`): `Comment = { id, start, end, body, authorId, authorName, authorColor, createdAt, resolved, resolvedAt?, replies: Reply[] }`. Stored in `STORAGE_KEYS.COMMENTS`.
+- **Hook** (`src/hooks/useComments.ts`): `addComment` (collapsed-or-empty-body = no-op), `addReply`, `toggleResolve`, `deleteComment`, `applyRemoteComments` (LWW: replaces the entire local list).
+- **Sync**: New `COMMENTS` collab message in `useCollab` carries the full comment list. App broadcasts on add / reply / resolve / delete; receivers replace via `applyRemoteComments`.
+- **UI**: `CommentHighlights` overlay (blue active / gray-dashed resolved, mix-blend-mode: multiply, z-index: 2 above review highlights). `CommentList` side panel renders thread with author dot, snippet, body, replies, reply textarea + Post button (disabled when empty), Resolve/Reopen toggle, Delete.
+- **Note**: Comment list test for `comment.body` uses `getByLabelText` for the reply textarea so changing the snippet text is unambiguous.

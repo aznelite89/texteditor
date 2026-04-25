@@ -5,6 +5,7 @@ import {
   COLLAB_TIMING,
   type CollabMessageType,
 } from '../constants/collab';
+import type { Comment } from '../constants/comments';
 import type { Review } from '../constants/review';
 import type { LocalUser } from './useLocalUser';
 
@@ -34,10 +35,12 @@ export type CollabEnvelope =
   | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.PING })
   | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.CARET; offset: number })
   | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.CONTENT; html: string })
-  | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.REVIEWS; reviews: Review[] });
+  | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.REVIEWS; reviews: Review[] })
+  | (EnvelopeBase & { type: typeof COLLAB_MESSAGE.COMMENTS; comments: Comment[] });
 
 export type RemoteContentHandler = (html: string, fromUserId: string) => void;
 export type RemoteReviewsHandler = (reviews: Review[], fromUserId: string) => void;
+export type RemoteCommentsHandler = (comments: Comment[], fromUserId: string) => void;
 
 export type UseCollabResult = {
   peers: Peer[];
@@ -45,8 +48,10 @@ export type UseCollabResult = {
   broadcastCaret: (offset: number) => void;
   broadcastContent: (html: string) => void;
   broadcastReviews: (reviews: Review[]) => void;
+  broadcastComments: (comments: Comment[]) => void;
   onRemoteContent: (handler: RemoteContentHandler) => () => void;
   onRemoteReviews: (handler: RemoteReviewsHandler) => () => void;
+  onRemoteComments: (handler: RemoteCommentsHandler) => () => void;
 };
 
 function upsertPeer(prev: Peer[], peer: Peer): Peer[] {
@@ -86,6 +91,7 @@ export function useCollab(localUser: LocalUser): UseCollabResult {
   const channelRef = useRef<BroadcastChannel | null>(null);
   const contentSubsRef = useRef<Set<RemoteContentHandler>>(new Set());
   const reviewsSubsRef = useRef<Set<RemoteReviewsHandler>>(new Set());
+  const commentsSubsRef = useRef<Set<RemoteCommentsHandler>>(new Set());
 
   useEffect(() => {
     if (typeof BroadcastChannel === 'undefined') return;
@@ -141,6 +147,9 @@ export function useCollab(localUser: LocalUser): UseCollabResult {
       } else if (msg.type === COLLAB_MESSAGE.REVIEWS) {
         setPeers((prev) => upsertPeer(prev, seenPeer));
         for (const cb of reviewsSubsRef.current) cb(msg.reviews, msg.from);
+      } else if (msg.type === COLLAB_MESSAGE.COMMENTS) {
+        setPeers((prev) => upsertPeer(prev, seenPeer));
+        for (const cb of commentsSubsRef.current) cb(msg.comments, msg.from);
       }
     };
 
@@ -234,13 +243,38 @@ export function useCollab(localUser: LocalUser): UseCollabResult {
     };
   }, []);
 
+  const broadcastComments = useCallback(
+    (comments: Comment[]) => {
+      const ch = channelRef.current;
+      if (!ch) return;
+      ch.postMessage({
+        type: COLLAB_MESSAGE.COMMENTS,
+        from: localUser.id,
+        fromName: localUser.name,
+        fromColor: localUser.color,
+        ts: Date.now(),
+        comments,
+      } satisfies CollabEnvelope);
+    },
+    [localUser.id, localUser.name, localUser.color],
+  );
+
+  const onRemoteComments = useCallback((handler: RemoteCommentsHandler) => {
+    commentsSubsRef.current.add(handler);
+    return () => {
+      commentsSubsRef.current.delete(handler);
+    };
+  }, []);
+
   return {
     peers,
     remoteCarets,
     broadcastCaret,
     broadcastContent,
     broadcastReviews,
+    broadcastComments,
     onRemoteContent,
     onRemoteReviews,
+    onRemoteComments,
   };
 }

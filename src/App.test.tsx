@@ -6,6 +6,7 @@ import {
   COLLAB_MESSAGE,
   SESSION_KEYS,
 } from './constants/collab';
+import { type Comment } from './constants/comments';
 import { REVIEW_STATUS, type Review } from './constants/review';
 import { STORAGE_KEYS } from './constants/storageKeys';
 import { UI_LABEL } from './constants/ui';
@@ -658,6 +659,291 @@ describe('App — Requirement 8: review highlighting end-to-end', () => {
     const raw = window.localStorage.getItem(STORAGE_KEYS.REVIEWS);
     const stored = raw ? (JSON.parse(raw) as Review[]) : [];
     expect(stored).toHaveLength(0);
+  });
+});
+
+describe('App — Requirement 9: comments end-to-end', () => {
+  let externalChannel: BroadcastChannel | null = null;
+  let promptSpy: ReturnType<typeof vi.spyOn>;
+  let confirmSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    clearAppStorage();
+    installExecCommand();
+    promptSpy = vi.spyOn(window, 'prompt');
+    confirmSpy = vi.spyOn(window, 'confirm');
+  });
+
+  afterEach(() => {
+    externalChannel?.close();
+    externalChannel = null;
+    promptSpy.mockRestore();
+    confirmSpy.mockRestore();
+    clearAppStorage();
+    uninstallExecCommand();
+  });
+
+  function selectRangeInEditor(editor: HTMLElement, start: number, end: number) {
+    const text = editor.querySelector('p')!.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, end);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  it('clicking Add comment with a selection + body creates a comment and broadcasts', async () => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CONTENT,
+      JSON.stringify('<p>hello world</p>'),
+    );
+    promptSpy.mockReturnValue('please reword');
+    externalChannel = new BroadcastChannel(COLLAB_CHANNEL);
+    const received: CollabEnvelope[] = [];
+    externalChannel.addEventListener('message', (e) => received.push(e.data));
+
+    render(<App />);
+    await flush();
+    received.length = 0;
+
+    const editor = getEditor();
+    selectRangeInEditor(editor, 0, 5);
+
+    fireEvent.mouseDown(screen.getByRole('button', { name: UI_LABEL.ADD_COMMENT }));
+    await flush();
+
+    const raw = window.localStorage.getItem(STORAGE_KEYS.COMMENTS);
+    const stored = raw ? (JSON.parse(raw) as Comment[]) : [];
+    expect(stored).toHaveLength(1);
+    expect(stored[0].body).toBe('please reword');
+    expect(stored[0].start).toBe(0);
+    expect(stored[0].end).toBe(5);
+
+    await waitFor(() => {
+      const env = received.find((m) => m.type === COLLAB_MESSAGE.COMMENTS);
+      expect(env).toBeDefined();
+    });
+  });
+
+  it('clicking Add comment with a collapsed selection does NOT create a comment', () => {
+    window.localStorage.setItem(STORAGE_KEYS.CONTENT, JSON.stringify('<p>hello</p>'));
+    promptSpy.mockReturnValue('would not see this');
+
+    render(<App />);
+    const editor = getEditor();
+    selectRangeInEditor(editor, 2, 2);
+
+    fireEvent.mouseDown(screen.getByRole('button', { name: UI_LABEL.ADD_COMMENT }));
+
+    expect(promptSpy).not.toHaveBeenCalled();
+    const raw = window.localStorage.getItem(STORAGE_KEYS.COMMENTS);
+    const stored = raw ? (JSON.parse(raw) as Comment[]) : [];
+    expect(stored).toHaveLength(0);
+  });
+
+  it('cancelling the comment prompt does NOT create a comment', () => {
+    window.localStorage.setItem(STORAGE_KEYS.CONTENT, JSON.stringify('<p>hello world</p>'));
+    promptSpy.mockReturnValue(null);
+
+    render(<App />);
+    const editor = getEditor();
+    selectRangeInEditor(editor, 0, 5);
+
+    fireEvent.mouseDown(screen.getByRole('button', { name: UI_LABEL.ADD_COMMENT }));
+
+    expect(promptSpy).toHaveBeenCalledWith(/* prompt */ expect.any(String), '');
+    const raw = window.localStorage.getItem(STORAGE_KEYS.COMMENTS);
+    const stored = raw ? (JSON.parse(raw) as Comment[]) : [];
+    expect(stored).toHaveLength(0);
+  });
+
+  it('renders a comment highlight overlay for a stored comment', () => {
+    const previousRects = Range.prototype.getClientRects;
+    Range.prototype.getClientRects = function () {
+      const r = {
+        x: 10, y: 20, width: 60, height: 18, top: 20, left: 10, right: 70, bottom: 38,
+        toJSON: () => ({}),
+      } as DOMRect;
+      const list = [r] as unknown as DOMRectList;
+      (list as unknown as { length: number }).length = 1;
+      return list;
+    };
+
+    try {
+      window.localStorage.setItem(STORAGE_KEYS.CONTENT, JSON.stringify('<p>hello world</p>'));
+      const seeded: Comment[] = [
+        {
+          id: 'visible',
+          start: 0,
+          end: 5,
+          body: 'a note',
+          authorId: 'me',
+          authorName: 'Mia',
+          authorColor: '#111',
+          createdAt: 1,
+          resolved: false,
+          replies: [],
+        },
+      ];
+      window.localStorage.setItem(STORAGE_KEYS.COMMENTS, JSON.stringify(seeded));
+
+      const { container } = render(<App />);
+      expect(container.querySelector('[data-testid="comment-highlight-visible"]')).not.toBeNull();
+    } finally {
+      Range.prototype.getClientRects = previousRects;
+    }
+  });
+
+  it('applies a remote COMMENTS message: peer-published comments appear locally', async () => {
+    window.localStorage.setItem(STORAGE_KEYS.CONTENT, JSON.stringify('<p>hello world</p>'));
+    render(<App />);
+    externalChannel = new BroadcastChannel(COLLAB_CHANNEL);
+
+    const incoming: Comment[] = [
+      {
+        id: 'peer-c',
+        start: 6,
+        end: 11,
+        body: 'from peer',
+        authorId: 'peer-id',
+        authorName: 'Peer',
+        authorColor: '#10b981',
+        createdAt: 1,
+        resolved: false,
+        replies: [],
+      },
+    ];
+    externalChannel.postMessage({
+      type: COLLAB_MESSAGE.COMMENTS,
+      from: 'peer-id',
+      fromName: 'Peer',
+      fromColor: '#10b981',
+      ts: Date.now(),
+      comments: incoming,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('comment-item-peer-c')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('comment-item-peer-c')).toHaveTextContent('from peer');
+  });
+
+  it('Resolve flips the comment state and broadcasts', async () => {
+    window.localStorage.setItem(STORAGE_KEYS.CONTENT, JSON.stringify('<p>hello world</p>'));
+    const seeded: Comment[] = [
+      {
+        id: 'to-resolve',
+        start: 0,
+        end: 5,
+        body: 'a note',
+        authorId: 'me',
+        authorName: 'Mia',
+        authorColor: '#111',
+        createdAt: 1,
+        resolved: false,
+        replies: [],
+      },
+    ];
+    window.localStorage.setItem(STORAGE_KEYS.COMMENTS, JSON.stringify(seeded));
+    externalChannel = new BroadcastChannel(COLLAB_CHANNEL);
+    const received: CollabEnvelope[] = [];
+    externalChannel.addEventListener('message', (e) => received.push(e.data));
+
+    render(<App />);
+    await flush();
+    received.length = 0;
+
+    fireEvent.click(screen.getByRole('button', { name: UI_LABEL.COMMENT_RESOLVE }));
+    await flush();
+
+    expect(screen.getByTestId('comment-item-to-resolve')).toHaveAttribute('data-resolved', 'true');
+    await waitFor(() => {
+      const env = received.find((m) => m.type === COLLAB_MESSAGE.COMMENTS);
+      expect(env).toBeDefined();
+      if (env?.type === COLLAB_MESSAGE.COMMENTS) {
+        expect(env.comments[0].resolved).toBe(true);
+      }
+    });
+  });
+
+  it('adding a reply appends to the thread and broadcasts', async () => {
+    window.localStorage.setItem(STORAGE_KEYS.CONTENT, JSON.stringify('<p>hello world</p>'));
+    const seeded: Comment[] = [
+      {
+        id: 'parent',
+        start: 0,
+        end: 5,
+        body: 'parent body',
+        authorId: 'me',
+        authorName: 'Mia',
+        authorColor: '#111',
+        createdAt: 1,
+        resolved: false,
+        replies: [],
+      },
+    ];
+    window.localStorage.setItem(STORAGE_KEYS.COMMENTS, JSON.stringify(seeded));
+    externalChannel = new BroadcastChannel(COLLAB_CHANNEL);
+    const received: CollabEnvelope[] = [];
+    externalChannel.addEventListener('message', (e) => received.push(e.data));
+
+    render(<App />);
+    await flush();
+    received.length = 0;
+
+    const textarea = screen.getByLabelText(UI_LABEL.COMMENT_REPLY_PLACEHOLDER) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'first reply' } });
+    fireEvent.click(screen.getByRole('button', { name: UI_LABEL.COMMENT_REPLY }));
+    await flush();
+
+    expect(screen.getByTestId('comment-item-parent')).toHaveTextContent('first reply');
+    await waitFor(() => {
+      const env = received.find((m) => m.type === COLLAB_MESSAGE.COMMENTS);
+      expect(env).toBeDefined();
+      if (env?.type === COLLAB_MESSAGE.COMMENTS) {
+        expect(env.comments[0].replies).toHaveLength(1);
+        expect(env.comments[0].replies[0].body).toBe('first reply');
+      }
+    });
+  });
+
+  it('Delete with confirmation removes the comment and broadcasts', async () => {
+    const seeded: Comment[] = [
+      {
+        id: 'to-delete',
+        start: 0,
+        end: 4,
+        body: 'gone soon',
+        authorId: 'me',
+        authorName: 'Mia',
+        authorColor: '#111',
+        createdAt: 1,
+        resolved: false,
+        replies: [],
+      },
+    ];
+    window.localStorage.setItem(STORAGE_KEYS.COMMENTS, JSON.stringify(seeded));
+    confirmSpy.mockReturnValue(true);
+    externalChannel = new BroadcastChannel(COLLAB_CHANNEL);
+    const received: CollabEnvelope[] = [];
+    externalChannel.addEventListener('message', (e) => received.push(e.data));
+
+    render(<App />);
+    await flush();
+    received.length = 0;
+
+    fireEvent.click(screen.getByRole('button', { name: UI_LABEL.COMMENT_DELETE }));
+    await flush();
+
+    expect(screen.queryByTestId('comment-item-to-delete')).toBeNull();
+    await waitFor(() => {
+      const env = received.find((m) => m.type === COLLAB_MESSAGE.COMMENTS);
+      expect(env).toBeDefined();
+      if (env?.type === COLLAB_MESSAGE.COMMENTS) {
+        expect(env.comments).toHaveLength(0);
+      }
+    });
   });
 });
 

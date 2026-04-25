@@ -31,6 +31,16 @@ export const UI_LABEL = {
   REVIEW_DRAFT_BADGE: 'Draft',
   REVIEW_COMPLETED_BADGE: 'Completed',
   REVIEW_HINT: 'Tip: select text in the editor, then click the Review button in the toolbar to request a review.',
+  ADD_COMMENT: 'Add comment',
+  COMMENTS_HEADING: 'Comments',
+  EMPTY_COMMENTS: 'No comments yet.',
+  COMMENT_RESOLVE: 'Resolve',
+  COMMENT_REOPEN: 'Reopen',
+  COMMENT_DELETE: 'Delete',
+  COMMENT_REPLY: 'Reply',
+  COMMENT_REPLY_PLACEHOLDER: 'Write a reply…',
+  COMMENT_RESOLVED_BADGE: 'Resolved',
+  COMMENT_HINT: 'Tip: select text in the editor, then click the Comment button in the toolbar to start a thread.',
 } as const;
 
 export const UI_PROMPT = {
@@ -38,4 +48,6 @@ export const UI_PROMPT = {
   ASK_VERSION_NAME: 'Name this version:',
   CONFIRM_DELETE_VERSION: 'Delete this version?',
   CONFIRM_DELETE_REVIEW: 'Delete this review highlight?',
+  ASK_COMMENT_BODY: 'Add a comment:',
+  CONFIRM_DELETE_COMMENT: 'Delete this comment thread?',
 } as const;

@@ -7,6 +7,7 @@ export const COLLAB_MESSAGE = {
   CARET: 'caret',
   CONTENT: 'content',
   REVIEWS: 'reviews',
+  COMMENTS: 'comments',
 } as const;
 
 export type CollabMessageType = typeof COLLAB_MESSAGE[keyof typeof COLLAB_MESSAGE];

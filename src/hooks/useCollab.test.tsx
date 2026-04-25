@@ -4,6 +4,7 @@ import {
   COLLAB_CHANNEL,
   COLLAB_MESSAGE,
 } from '../constants/collab';
+import { type Comment } from '../constants/comments';
 import { REVIEW_STATUS, type Review } from '../constants/review';
 import { useCollab, type CollabEnvelope } from './useCollab';
 import type { LocalUser } from './useLocalUser';
@@ -281,6 +282,78 @@ describe('useCollab — Requirement 6: collab message protocol', () => {
 
     await act(async () => {
       externalChannel.postMessage(makePeerEnvelope(COLLAB_MESSAGE.REVIEWS, { reviews: incoming }));
+      await flush();
+    });
+
+    await waitFor(() => {
+      expect(handler).toHaveBeenCalledWith(incoming, PEER_USER.id);
+    });
+    unsubscribe();
+  });
+
+  it('broadcastComments posts a COMMENTS message with the list', async () => {
+    const received: CollabEnvelope[] = [];
+    externalChannel.addEventListener('message', (e) => received.push(e.data));
+
+    const { result } = renderHook(() => useCollab(LOCAL));
+    await flush();
+    received.length = 0;
+
+    const list: Comment[] = [
+      {
+        id: 'c-1',
+        start: 0,
+        end: 4,
+        body: 'hi',
+        authorId: LOCAL.id,
+        authorName: LOCAL.name,
+        authorColor: LOCAL.color,
+        createdAt: 1,
+        resolved: false,
+        replies: [],
+      },
+    ];
+
+    act(() => {
+      result.current.broadcastComments(list);
+    });
+    await flush();
+
+    const env = received.find((m) => m.type === COLLAB_MESSAGE.COMMENTS);
+    expect(env).toBeDefined();
+    if (env?.type === COLLAB_MESSAGE.COMMENTS) {
+      expect(env.comments).toEqual(list);
+      expect(env.from).toBe(LOCAL.id);
+    }
+  });
+
+  it('invokes onRemoteComments subscribers when a remote COMMENTS message arrives', async () => {
+    const { result } = renderHook(() => useCollab(LOCAL));
+    await flush();
+
+    const handler = vi.fn();
+    let unsubscribe = () => {};
+    act(() => {
+      unsubscribe = result.current.onRemoteComments(handler);
+    });
+
+    const incoming: Comment[] = [
+      {
+        id: 'remote-c',
+        start: 0,
+        end: 3,
+        body: 'from peer',
+        authorId: PEER_USER.id,
+        authorName: PEER_USER.name,
+        authorColor: PEER_USER.color,
+        createdAt: 1,
+        resolved: false,
+        replies: [],
+      },
+    ];
+
+    await act(async () => {
+      externalChannel.postMessage(makePeerEnvelope(COLLAB_MESSAGE.COMMENTS, { comments: incoming }));
       await flush();
     });
 

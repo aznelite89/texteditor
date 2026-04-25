@@ -1,4 +1,6 @@
 import { useCallback, useState, useEffect, useRef } from "react"
+import { CommentHighlights } from "./components/CommentHighlights"
+import { CommentList } from "./components/CommentList"
 import { Editor } from "./components/Editor"
 import { PresenceAvatars } from "./components/PresenceAvatars"
 import { RemoteCursors } from "./components/RemoteCursors"
@@ -9,9 +11,10 @@ import { VersionList } from "./components/VersionList"
 import { WordCount } from "./components/WordCount"
 import { REVIEW_STATUS } from "./constants/review"
 import { STORAGE_KEYS } from "./constants/storageKeys"
-import { UI_LABEL } from "./constants/ui"
+import { UI_LABEL, UI_PROMPT } from "./constants/ui"
 import { useActiveFormats } from "./hooks/useActiveFormats"
 import { useCollab } from "./hooks/useCollab"
+import { useComments } from "./hooks/useComments"
 import { useLocalStorage } from "./hooks/useLocalStorage"
 import { useLocalUser } from "./hooks/useLocalUser"
 import { useReviews } from "./hooks/useReviews"
@@ -30,6 +33,7 @@ export default function App() {
   const localUser = useLocalUser()
   const collab = useCollab(localUser)
   const reviewsApi = useReviews(localUser)
+  const commentsApi = useComments(localUser)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle")
   const [showSavedToast, setShowSavedToast] = useState(false)
 
@@ -95,6 +99,56 @@ export default function App() {
     [reviewsApi, collab],
   )
 
+  const handleAddComment = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    const range = selectionRangeOffsets(editor)
+    if (!range || range.start === range.end) return
+    const body = window.prompt(UI_PROMPT.ASK_COMMENT_BODY, "")
+    if (body === null) return
+    const created = commentsApi.addComment(range.start, range.end, body)
+    if (!created) return
+    collab.broadcastComments([...commentsApi.comments, created])
+  }, [commentsApi, collab])
+
+  const handleAddReply = useCallback(
+    (commentId: string, body: string) => {
+      const reply = commentsApi.addReply(commentId, body)
+      if (!reply) return
+      const next = commentsApi.comments.map((c) =>
+        c.id === commentId ? { ...c, replies: [...c.replies, reply] } : c,
+      )
+      collab.broadcastComments(next)
+    },
+    [commentsApi, collab],
+  )
+
+  const handleToggleResolveComment = useCallback(
+    (commentId: string) => {
+      commentsApi.toggleResolve(commentId)
+      const next = commentsApi.comments.map((c) =>
+        c.id === commentId
+          ? {
+              ...c,
+              resolved: !c.resolved,
+              resolvedAt: !c.resolved ? Date.now() : undefined,
+            }
+          : c,
+      )
+      collab.broadcastComments(next)
+    },
+    [commentsApi, collab],
+  )
+
+  const handleDeleteComment = useCallback(
+    (commentId: string) => {
+      commentsApi.deleteComment(commentId)
+      const next = commentsApi.comments.filter((c) => c.id !== commentId)
+      collab.broadcastComments(next)
+    },
+    [commentsApi, collab],
+  )
+
   // Apply remote content updates from peers.
   useEffect(() => {
     return collab.onRemoteContent((html) => {
@@ -108,6 +162,13 @@ export default function App() {
       reviewsApi.applyRemoteCompleted(incoming)
     })
   }, [collab, reviewsApi])
+
+  // Apply remote comment updates from peers.
+  useEffect(() => {
+    return collab.onRemoteComments((incoming) => {
+      commentsApi.applyRemoteComments(incoming)
+    })
+  }, [collab, commentsApi])
 
   // Show "All changes saved" toast 1.5s after the user stops typing
   useEffect(() => {
@@ -154,6 +215,7 @@ export default function App() {
             activeFormats={activeFormats}
             editorRef={editorRef}
             onMarkReview={handleMarkReview}
+            onAddComment={handleAddComment}
           />
           <div className="editor-wrapper">
             <Editor
@@ -165,6 +227,11 @@ export default function App() {
             <ReviewHighlights
               editorRef={editorRef}
               reviews={reviewsApi.reviews}
+              content={content}
+            />
+            <CommentHighlights
+              editorRef={editorRef}
+              comments={commentsApi.comments}
               content={content}
             />
             <RemoteCursors
@@ -183,6 +250,13 @@ export default function App() {
             onComplete={handleCompleteReview}
             onDelete={handleDeleteReview}
           />
+          <CommentList
+            comments={commentsApi.comments}
+            content={content}
+            onAddReply={handleAddReply}
+            onToggleResolve={handleToggleResolveComment}
+            onDelete={handleDeleteComment}
+          />
           <VersionList
             versions={versions}
             currentContent={content}
@@ -191,6 +265,7 @@ export default function App() {
             onDelete={deleteVersion}
           />
           <p className="app__hint" data-testid="review-hint">{UI_LABEL.REVIEW_HINT}</p>
+          <p className="app__hint" data-testid="comment-hint">{UI_LABEL.COMMENT_HINT}</p>
         </aside>
       </main>
     </div>

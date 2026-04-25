@@ -6,6 +6,13 @@
 - Remote cursor now appears on click (not only on typing): caret offset broadcasts on `mouseup`/`keyup`/`focus` in addition to `selectionchange`; `textOffsetFromSelection` handles root-as-anchor selections; `RemoteCursors` falls back to `getClientRects()` then the parent element rect when `getBoundingClientRect()` is all zeros (`src/utils/caretOffset.ts`, `src/components/Editor.tsx`, `src/components/RemoteCursors.tsx`)
 
 ### Added
+- Comments (Word/Docs-style): toolbar Add comment button, prompt-based body input, threaded replies with Post button, Resolve/Reopen toggle, Delete with confirmation, blue active / gray-dashed resolved highlight overlay, full sync across peers via BroadcastChannel, persisted to localStorage
+- `Comment` and `Reply` types + `COMMENT_HIGHLIGHT_COLOR` in `src/constants/comments.ts`; `STORAGE_KEYS.COMMENTS`; `COLLAB_MESSAGE.COMMENTS` envelope
+- `useComments` hook (`src/hooks/useComments.ts`) with addComment / addReply / toggleResolve / deleteComment / applyRemoteComments
+- `CommentHighlights` overlay (`src/components/CommentHighlights.tsx`) and `CommentList` thread panel (`src/components/CommentList.tsx`)
+- Toolbar "Add comment" button in `src/components/Toolbar.tsx`
+- Hint label under the side panel referencing the Comment button (`UI_LABEL.COMMENT_HINT`)
+- Phase 8 tests: 11 useComments, 2 useCollab COMMENTS protocol, 4 CommentHighlights, 9 CommentList, 8 App integration
 - Review functionality: two-step workflow (Mark reviewed → Complete) with yellow draft / green completed highlights, side panel listing reviews with Complete + Delete, and live sync of completed reviews across peers over BroadcastChannel
 - `Review` data model + `REVIEW_STATUS` enum in `src/constants/review.ts`; `STORAGE_KEYS.REVIEWS`; `COLLAB_MESSAGE.REVIEWS` envelope
 - `useReviews` hook (`src/hooks/useReviews.ts`) with markForReview / completeReview / deleteReview / applyRemoteCompleted
