@@ -1,13 +1,18 @@
-import { useCallback, useState, useEffect, useRef } from "react"
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { CommentHighlights } from "./components/CommentHighlights"
-import { CommentList } from "./components/CommentList"
 import { Editor } from "./components/Editor"
 import { PresenceAvatars } from "./components/PresenceAvatars"
 import { RemoteCursors } from "./components/RemoteCursors"
 import { ReviewHighlights } from "./components/ReviewHighlights"
-import { ReviewList } from "./components/ReviewList"
 import { Toolbar } from "./components/Toolbar"
-import { VersionList } from "./components/VersionList"
 import { WordCount } from "./components/WordCount"
 import { REVIEW_STATUS } from "./constants/review"
 import { STORAGE_KEYS } from "./constants/storageKeys"
@@ -20,12 +25,18 @@ import { useLocalUser } from "./hooks/useLocalUser"
 import { useReviews } from "./hooks/useReviews"
 import { useVersions } from "./hooks/useVersions"
 import { selectionRangeOffsets } from "./utils/caretOffset"
+import { rafThrottle } from "./utils/rafThrottle"
 import "./App.css"
+
+// Side panel mounts late and isn't on the critical typing path — code-split it.
+const ReviewList = lazy(() => import("./components/ReviewList"))
+const CommentList = lazy(() => import("./components/CommentList"))
+const VersionList = lazy(() => import("./components/VersionList"))
 
 export default function App() {
   const [content, setContent] = useLocalStorage<string>(
     STORAGE_KEYS.CONTENT,
-    ""
+    "",
   )
   const { versions, saveVersion, deleteVersion } = useVersions()
   const editorRef = useRef<HTMLDivElement | null>(null)
@@ -37,30 +48,60 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle")
   const [showSavedToast, setShowSavedToast] = useState(false)
 
+  // Latest-value refs so handlers can stay stable across renders.
+  const collabRef = useRef(collab)
+  collabRef.current = collab
+  const reviewsRef = useRef(reviewsApi)
+  reviewsRef.current = reviewsApi
+  const commentsRef = useRef(commentsApi)
+  commentsRef.current = commentsApi
+  const setContentRef = useRef(setContent)
+  setContentRef.current = setContent
+
+  // rAF-throttled broadcasts: callers can fire them every keystroke /
+  // selectionchange — at most one BroadcastChannel.postMessage per frame.
+  const broadcastContentThrottled = useMemo(
+    () => rafThrottle((html: string) => collabRef.current.broadcastContent(html)),
+    [],
+  )
+  const broadcastCaretThrottled = useMemo(
+    () => rafThrottle((offset: number) => collabRef.current.broadcastCaret(offset)),
+    [],
+  )
+  useEffect(
+    () => () => {
+      broadcastContentThrottled.cancel()
+      broadcastCaretThrottled.cancel()
+    },
+    [broadcastContentThrottled, broadcastCaretThrottled],
+  )
+
   const handleLocalChange = useCallback(
     (next: string) => {
-      setContent(next)
-      collab.broadcastContent(next)
+      setContentRef.current(next)
+      broadcastContentThrottled(next)
     },
-    [setContent, collab],
+    [broadcastContentThrottled],
   )
 
   const handleCaretChange = useCallback(
-    (offset: number) => collab.broadcastCaret(offset),
-    [collab],
+    (offset: number) => broadcastCaretThrottled(offset),
+    [broadcastCaretThrottled],
   )
 
   const clear = useCallback(() => {
-    setContent("")
-    collab.broadcastContent("")
-  }, [setContent, collab])
+    setContentRef.current("")
+    broadcastContentThrottled.cancel()
+    collabRef.current.broadcastContent("")
+  }, [broadcastContentThrottled])
 
   const restore = useCallback(
     (next: string) => {
-      setContent(next)
-      collab.broadcastContent(next)
+      setContentRef.current(next)
+      broadcastContentThrottled.cancel()
+      collabRef.current.broadcastContent(next)
     },
-    [setContent, collab],
+    [broadcastContentThrottled],
   )
 
   const handleMarkReview = useCallback(() => {
@@ -68,36 +109,33 @@ export default function App() {
     if (!editor) return
     const range = selectionRangeOffsets(editor)
     if (!range) return
-    reviewsApi.markForReview(range.start, range.end)
-  }, [reviewsApi])
+    reviewsRef.current.markForReview(range.start, range.end)
+  }, [])
 
-  const handleCompleteReview = useCallback(
-    (id: string) => {
-      reviewsApi.completeReview(id)
-      const completedAfter = reviewsApi.reviews
-        .map((r) =>
-          r.id === id
-            ? { ...r, status: REVIEW_STATUS.COMPLETED, completedAt: Date.now() }
-            : r,
-        )
-        .filter((r) => r.status === REVIEW_STATUS.COMPLETED)
-      collab.broadcastReviews(completedAfter)
-    },
-    [reviewsApi, collab],
-  )
+  const handleCompleteReview = useCallback((id: string) => {
+    const reviews = reviewsRef.current
+    reviews.completeReview(id)
+    const completedAfter = reviews.reviews
+      .map((r) =>
+        r.id === id
+          ? { ...r, status: REVIEW_STATUS.COMPLETED, completedAt: Date.now() }
+          : r,
+      )
+      .filter((r) => r.status === REVIEW_STATUS.COMPLETED)
+    collabRef.current.broadcastReviews(completedAfter)
+  }, [])
 
-  const handleDeleteReview = useCallback(
-    (id: string) => {
-      const review = reviewsApi.reviews.find((r) => r.id === id)
-      reviewsApi.deleteReview(id)
-      if (review?.status === REVIEW_STATUS.COMPLETED) {
-        const completedAfter = reviewsApi.reviews
-          .filter((r) => r.id !== id && r.status === REVIEW_STATUS.COMPLETED)
-        collab.broadcastReviews(completedAfter)
-      }
-    },
-    [reviewsApi, collab],
-  )
+  const handleDeleteReview = useCallback((id: string) => {
+    const reviews = reviewsRef.current
+    const review = reviews.reviews.find((r) => r.id === id)
+    reviews.deleteReview(id)
+    if (review?.status === REVIEW_STATUS.COMPLETED) {
+      const completedAfter = reviews.reviews.filter(
+        (r) => r.id !== id && r.status === REVIEW_STATUS.COMPLETED,
+      )
+      collabRef.current.broadcastReviews(completedAfter)
+    }
+  }, [])
 
   const handleAddComment = useCallback(() => {
     const editor = editorRef.current
@@ -106,84 +144,83 @@ export default function App() {
     if (!range || range.start === range.end) return
     const body = window.prompt(UI_PROMPT.ASK_COMMENT_BODY, "")
     if (body === null) return
-    const created = commentsApi.addComment(range.start, range.end, body)
+    const comments = commentsRef.current
+    const created = comments.addComment(range.start, range.end, body)
     if (!created) return
-    collab.broadcastComments([...commentsApi.comments, created])
-  }, [commentsApi, collab])
+    collabRef.current.broadcastComments([...comments.comments, created])
+  }, [])
 
-  const handleAddReply = useCallback(
-    (commentId: string, body: string) => {
-      const reply = commentsApi.addReply(commentId, body)
-      if (!reply) return
-      const next = commentsApi.comments.map((c) =>
-        c.id === commentId ? { ...c, replies: [...c.replies, reply] } : c,
-      )
-      collab.broadcastComments(next)
-    },
-    [commentsApi, collab],
-  )
+  const handleAddReply = useCallback((commentId: string, body: string) => {
+    const comments = commentsRef.current
+    const reply = comments.addReply(commentId, body)
+    if (!reply) return
+    const next = comments.comments.map((c) =>
+      c.id === commentId ? { ...c, replies: [...c.replies, reply] } : c,
+    )
+    collabRef.current.broadcastComments(next)
+  }, [])
 
-  const handleToggleResolveComment = useCallback(
-    (commentId: string) => {
-      commentsApi.toggleResolve(commentId)
-      const next = commentsApi.comments.map((c) =>
-        c.id === commentId
-          ? {
-              ...c,
-              resolved: !c.resolved,
-              resolvedAt: !c.resolved ? Date.now() : undefined,
-            }
-          : c,
-      )
-      collab.broadcastComments(next)
-    },
-    [commentsApi, collab],
-  )
+  const handleToggleResolveComment = useCallback((commentId: string) => {
+    const comments = commentsRef.current
+    comments.toggleResolve(commentId)
+    const next = comments.comments.map((c) =>
+      c.id === commentId
+        ? {
+            ...c,
+            resolved: !c.resolved,
+            resolvedAt: !c.resolved ? Date.now() : undefined,
+          }
+        : c,
+    )
+    collabRef.current.broadcastComments(next)
+  }, [])
 
-  const handleDeleteComment = useCallback(
-    (commentId: string) => {
-      commentsApi.deleteComment(commentId)
-      const next = commentsApi.comments.filter((c) => c.id !== commentId)
-      collab.broadcastComments(next)
-    },
-    [commentsApi, collab],
-  )
+  const handleDeleteComment = useCallback((commentId: string) => {
+    const comments = commentsRef.current
+    comments.deleteComment(commentId)
+    const next = comments.comments.filter((c) => c.id !== commentId)
+    collabRef.current.broadcastComments(next)
+  }, [])
 
-  // Apply remote content updates from peers.
+  // Subscribe to remote messages exactly once per collab instance. Since
+  // useCollab's return is memoized, this effect only re-runs when the
+  // underlying transport actually changes — not on every parent render.
   useEffect(() => {
-    return collab.onRemoteContent((html) => {
-      setContent(html)
-    })
-  }, [collab, setContent])
+    return collab.onRemoteContent((html) => setContentRef.current(html))
+  }, [collab])
 
-  // Apply remote review updates (completed reviews) from peers.
   useEffect(() => {
     return collab.onRemoteReviews((incoming) => {
-      reviewsApi.applyRemoteCompleted(incoming)
+      reviewsRef.current.applyRemoteCompleted(incoming)
     })
-  }, [collab, reviewsApi])
+  }, [collab])
 
-  // Apply remote comment updates from peers.
   useEffect(() => {
     return collab.onRemoteComments((incoming) => {
-      commentsApi.applyRemoteComments(incoming)
+      commentsRef.current.applyRemoteComments(incoming)
     })
-  }, [collab, commentsApi])
+  }, [collab])
 
-  // Show "All changes saved" toast 1.5s after the user stops typing
+  // "All changes saved" toast — properly tracks BOTH timers so resetting
+  // typing while the toast is visible doesn't leak the hide timer.
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    if (!content && content !== "") return
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
     setSaveStatus("idle")
-    const idleTimer = setTimeout(() => {
+    idleTimerRef.current = setTimeout(() => {
       setSaveStatus("saved")
       setShowSavedToast(true)
-      const hideTimer = setTimeout(() => {
+      hideTimerRef.current = setTimeout(() => {
         setShowSavedToast(false)
         setSaveStatus("idle")
       }, 2000)
-      return () => clearTimeout(hideTimer)
     }, 1500)
-    return () => clearTimeout(idleTimer)
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+    }
   }, [content])
 
   return (
@@ -244,26 +281,28 @@ export default function App() {
           </div>
         </section>
         <aside className="app__side">
-          <ReviewList
-            reviews={reviewsApi.reviews}
-            content={content}
-            onComplete={handleCompleteReview}
-            onDelete={handleDeleteReview}
-          />
-          <CommentList
-            comments={commentsApi.comments}
-            content={content}
-            onAddReply={handleAddReply}
-            onToggleResolve={handleToggleResolveComment}
-            onDelete={handleDeleteComment}
-          />
-          <VersionList
-            versions={versions}
-            currentContent={content}
-            onSave={saveVersion}
-            onRestore={restore}
-            onDelete={deleteVersion}
-          />
+          <Suspense fallback={<div className="app__side-fallback" />}>
+            <ReviewList
+              reviews={reviewsApi.reviews}
+              content={content}
+              onComplete={handleCompleteReview}
+              onDelete={handleDeleteReview}
+            />
+            <CommentList
+              comments={commentsApi.comments}
+              content={content}
+              onAddReply={handleAddReply}
+              onToggleResolve={handleToggleResolveComment}
+              onDelete={handleDeleteComment}
+            />
+            <VersionList
+              versions={versions}
+              currentContent={content}
+              onSave={saveVersion}
+              onRestore={restore}
+              onDelete={deleteVersion}
+            />
+          </Suspense>
           <p className="app__hint" data-testid="review-hint">{UI_LABEL.REVIEW_HINT}</p>
           <p className="app__hint" data-testid="comment-hint">{UI_LABEL.COMMENT_HINT}</p>
         </aside>

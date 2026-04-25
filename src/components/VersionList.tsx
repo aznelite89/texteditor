@@ -1,5 +1,26 @@
+import { memo, useCallback } from 'react';
 import { UI_LABEL, UI_PROMPT } from '../constants/ui';
 import type { Version } from '../hooks/useVersions';
+
+function formatRelative(createdAt: number, now: number = Date.now()): string {
+  const diffMs = now - createdAt;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  const date = new Date(createdAt);
+  const nowDate = new Date(now);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: date.getFullYear() !== nowDate.getFullYear() ? 'numeric' : undefined,
+  });
+}
 
 type VersionListProps = {
   versions: Version[];
@@ -9,44 +30,27 @@ type VersionListProps = {
   onDelete: (id: string) => void;
 };
 
-export function VersionList({
+function VersionListImpl({
   versions,
   currentContent,
   onSave,
   onRestore,
   onDelete,
 }: VersionListProps) {
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     const name = window.prompt(UI_PROMPT.ASK_VERSION_NAME, '');
     if (name === null) return;
     onSave(name, currentContent);
-  };
+  }, [onSave, currentContent]);
 
-  const handleDelete = (id: string) => {
-    if (window.confirm(UI_PROMPT.CONFIRM_DELETE_VERSION)) {
-      onDelete(id);
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
-    });
-  };
+  const handleDelete = useCallback(
+    (id: string) => {
+      if (window.confirm(UI_PROMPT.CONFIRM_DELETE_VERSION)) {
+        onDelete(id);
+      }
+    },
+    [onDelete],
+  );
 
   return (
     <aside className="versions">
@@ -78,7 +82,7 @@ export function VersionList({
               <div className="versions__meta">
                 <span className="versions__name">{v.name || 'Untitled'}</span>
                 <time className="versions__time">
-                  {formatDate(new Date(v.createdAt).toISOString())}
+                  {formatRelative(v.createdAt)}
                 </time>
               </div>
               <div className="versions__actions">
@@ -99,3 +103,6 @@ export function VersionList({
     </aside>
   );
 }
+
+export const VersionList = memo(VersionListImpl);
+export default VersionList;

@@ -1,5 +1,13 @@
-import { useEffect, useState, type CSSProperties, type RefObject } from 'react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from 'react';
 import { nodeAtOffset } from '../utils/caretOffset';
+import { rafThrottle } from '../utils/rafThrottle';
 import type { Peer, RemoteCaret } from '../hooks/useCollab';
 
 type Position = { top: number; left: number; height: number };
@@ -18,8 +26,6 @@ function isZeroRect(rect: DOMRect): boolean {
 function rectFromRange(range: Range): DOMRect | null {
   const direct = range.getBoundingClientRect();
   if (!isZeroRect(direct)) return direct;
-  // Some browsers return a usable entry in getClientRects() even when
-  // getBoundingClientRect() reports all zeros for a collapsed range.
   const list = range.getClientRects();
   for (let i = 0; i < list.length; i++) {
     const r = list[i];
@@ -35,13 +41,13 @@ function fallbackRectFromNode(node: Node): DOMRect | null {
   return isZeroRect(rect) ? null : rect;
 }
 
-export function RemoteCursors({ editorRef, carets, peers, content }: RemoteCursorsProps) {
+function RemoteCursorsImpl({ editorRef, carets, peers, content }: RemoteCursorsProps) {
   const [positions, setPositions] = useState<Map<string, Position>>(new Map());
 
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) {
-      setPositions(new Map());
+      setPositions((prev) => (prev.size === 0 ? prev : new Map()));
       return;
     }
 
@@ -60,8 +66,6 @@ export function RemoteCursors({ editorRef, carets, peers, content }: RemoteCurso
         }
         const rect = rectFromRange(range) ?? fallbackRectFromNode(found.node);
         if (!rect) {
-          // Last-resort anchor: pin to the editor's top-left so the peer is
-          // still visible rather than silently dropped.
           next.set(userId, { top: 0, left: 0, height: 18 });
           continue;
         }
@@ -74,20 +78,29 @@ export function RemoteCursors({ editorRef, carets, peers, content }: RemoteCurso
       setPositions(next);
     };
 
+    // First compute is synchronous so the cursor appears immediately;
+    // resize/scroll updates are throttled to one per frame.
     compute();
-    const onResize = () => compute();
-    window.addEventListener('resize', onResize);
-    window.addEventListener('scroll', onResize, true);
+    const throttled = rafThrottle(compute);
+    window.addEventListener('resize', throttled);
+    window.addEventListener('scroll', throttled, true);
     return () => {
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('scroll', onResize, true);
+      throttled.cancel();
+      window.removeEventListener('resize', throttled);
+      window.removeEventListener('scroll', throttled, true);
     };
   }, [editorRef, carets, content]);
+
+  const peerById = useMemo(() => {
+    const map = new Map<string, Peer>();
+    for (const p of peers) map.set(p.id, p);
+    return map;
+  }, [peers]);
 
   return (
     <div className="remote-cursors" aria-hidden>
       {Array.from(positions.entries()).map(([userId, pos]) => {
-        const peer = peers.find((p) => p.id === userId);
+        const peer = peerById.get(userId);
         if (!peer) return null;
         const style: CSSProperties = {
           top: pos.top,
@@ -112,3 +125,5 @@ export function RemoteCursors({ editorRef, carets, peers, content }: RemoteCurso
     </div>
   );
 }
+
+export const RemoteCursors = memo(RemoteCursorsImpl);

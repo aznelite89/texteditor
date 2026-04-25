@@ -48,6 +48,22 @@ Preview the production build locally:
 pnpm preview
 ```
 
+## Tests
+
+The test suite uses [Vitest](https://vitest.dev/) with [Testing Library](https://testing-library.com/react) and jsdom.
+
+**Watch mode** (re-runs on file changes, default for local development):
+
+```bash
+pnpm test
+```
+
+**Single run** (exits with a non-zero code on failure; use in CI or before commits):
+
+```bash
+pnpm test:run
+```
+
 ## How to use the app
 
 - **Type in the editor**: click into the main editor area and start typing.

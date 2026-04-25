@@ -1,3 +1,4 @@
+import { memo, useCallback } from 'react';
 import { REVIEW_STATUS, type Review } from '../constants/review';
 import { UI_LABEL, UI_PROMPT } from '../constants/ui';
 
@@ -20,12 +21,15 @@ function snippet(html: string, start: number, end: number): string {
 
 type ReviewListProps2 = ReviewListProps & { content: string };
 
-export function ReviewList({ reviews, content, onComplete, onDelete }: ReviewListProps2) {
-  const handleDelete = (id: string) => {
-    if (window.confirm(UI_PROMPT.CONFIRM_DELETE_REVIEW)) {
-      onDelete(id);
-    }
-  };
+function ReviewListImpl({ reviews, content, onComplete, onDelete }: ReviewListProps2) {
+  const handleDelete = useCallback(
+    (id: string) => {
+      if (window.confirm(UI_PROMPT.CONFIRM_DELETE_REVIEW)) {
+        onDelete(id);
+      }
+    },
+    [onDelete],
+  );
 
   return (
     <aside className="reviews">
@@ -77,3 +81,6 @@ export function ReviewList({ reviews, content, onComplete, onDelete }: ReviewLis
     </aside>
   );
 }
+
+export const ReviewList = memo(ReviewListImpl);
+export default ReviewList;

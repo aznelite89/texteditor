@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-04-25
+
+### Changed
+- Document how to run tests (`pnpm test`, `pnpm test:run`) in README
+
+### Fixed
+- App freeze / "page unresponsive" under typing + collab load — root causes: every render rebuilt the `collab` object so all child effects torn down + re-attached on every keystroke; the Editor's document `selectionchange` listener was reattached on every render; `broadcastContent` and `broadcastCaret` fired on every keystroke / cursor move with no batching; the highlight overlays remeasured the DOM on every render with no rAF coalescing; the "All changes saved" toast effect leaked its inner `setTimeout` (the cleanup was wrongly returned from inside the timer callback).
+
+### Performance
+- New `rafThrottle` utility (`src/utils/rafThrottle.ts`) coalesces rapid calls to one per animation frame with `cancel`/`flush`
+- `useCollab`, `useReviews`, `useComments` return memoized objects so consumers depending on them don't re-subscribe / recreate callbacks on every parent render
+- App now stores `collab` / `reviewsApi` / `commentsApi` / `setContent` in refs and uses stable `useCallback`s with empty/minimal deps; `broadcastContent` and `broadcastCaret` are rAF-throttled via the new util
+- Editor uses ref-held `onCaretChange` / `onChange` callbacks; the document `selectionchange` listener attaches once for the component lifetime and is itself rAF-throttled
+- `RemoteCursors`, `ReviewHighlights`, `CommentHighlights` now compute positions synchronously on first render but throttle resize/scroll recomputes via rAF, and skip empty `setHighlights` updates to avoid identity churn
+- `React.memo` applied to `Editor`, `Toolbar`, `WordCount`, `PresenceAvatars`, `RemoteCursors`, `ReviewHighlights`, `CommentHighlights`, `ReviewList`, `CommentList`, `VersionList`
+- Side-panel components (`ReviewList`, `CommentList`, `VersionList`) are now `React.lazy`-loaded under a `<Suspense>` boundary, splitting them into their own chunks (`ReviewList-*.js` ~1.6KB, `VersionList-*.js` ~2.1KB, `CommentList-*.js` ~2.9KB) and trimming the initial bundle
+- `VersionList`'s relative-date helper is hoisted to module scope (single closure across renders) and accepts the raw `createdAt` number directly, removing per-render `Date(...).toISOString()` allocations
+- "All changes saved" toast effect rewritten with `useRef` timer handles so both the idle and hide timers clear on every content change — fixes the prior cleanup leak
+
 ## 2026-04-24
 
 ### Fixed

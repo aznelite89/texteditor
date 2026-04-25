@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { type Comment, type Reply } from '../constants/comments';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useLocalStorage } from './useLocalStorage';
@@ -95,5 +95,8 @@ export function useComments(localUser: LocalUser): UseCommentsResult {
     [setComments],
   );
 
-  return { comments, addComment, addReply, toggleResolve, deleteComment, applyRemoteComments };
+  return useMemo(
+    () => ({ comments, addComment, addReply, toggleResolve, deleteComment, applyRemoteComments }),
+    [comments, addComment, addReply, toggleResolve, deleteComment, applyRemoteComments],
+  );
 }

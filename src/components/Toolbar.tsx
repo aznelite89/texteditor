@@ -1,4 +1,4 @@
-import type { ChangeEvent, RefObject } from 'react';
+import { memo, useCallback, type ChangeEvent, type RefObject } from 'react';
 import { APP_EVENT } from '../constants/events';
 import {
   BLOCK_FORMAT,
@@ -28,7 +28,7 @@ type ToolbarProps = {
   onAddComment?: () => void;
 };
 
-export function Toolbar({
+function ToolbarImpl({
   onClear,
   activeFormats,
   editorRef,
@@ -37,38 +37,47 @@ export function Toolbar({
 }: ToolbarProps) {
   const withSelection = useSavedSelection(editorRef);
 
-  const handleClear = () => {
+  const handleClear = useCallback(() => {
     if (window.confirm(UI_PROMPT.CONFIRM_CLEAR)) {
       onClear();
     }
-  };
+  }, [onClear]);
 
-  const toggle = (cmd: FormatCommand) => {
+  const toggle = useCallback((cmd: FormatCommand) => {
     applyFormat(cmd);
     notifyFormatChange();
-  };
+  }, []);
 
-  const handleColor = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    withSelection(() => applyFormat(FORMAT_COMMAND.FORE_COLOR, value));
-    notifyFormatChange();
-  };
+  const handleColor = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      withSelection(() => applyFormat(FORMAT_COMMAND.FORE_COLOR, value));
+      notifyFormatChange();
+    },
+    [withSelection],
+  );
 
-  const handleFontSize = (e: ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    if (!value) return;
-    withSelection(() => applyFormat(FORMAT_COMMAND.FONT_SIZE, value));
-    notifyFormatChange();
-    e.currentTarget.value = '';
-  };
+  const handleFontSize = useCallback(
+    (e: ChangeEvent<HTMLSelectElement>) => {
+      const value = e.target.value;
+      if (!value) return;
+      withSelection(() => applyFormat(FORMAT_COMMAND.FONT_SIZE, value));
+      notifyFormatChange();
+      e.currentTarget.value = '';
+    },
+    [withSelection],
+  );
 
-  const handleBlockFormat = (e: ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    if (!value) return;
-    withSelection(() => applyFormat(FORMAT_COMMAND.FORMAT_BLOCK, value));
-    notifyFormatChange();
-    e.currentTarget.value = '';
-  };
+  const handleBlockFormat = useCallback(
+    (e: ChangeEvent<HTMLSelectElement>) => {
+      const value = e.target.value;
+      if (!value) return;
+      withSelection(() => applyFormat(FORMAT_COMMAND.FORMAT_BLOCK, value));
+      notifyFormatChange();
+      e.currentTarget.value = '';
+    },
+    [withSelection],
+  );
 
   const boldActive = activeFormats[FORMAT_COMMAND.BOLD];
   const italicActive = activeFormats[FORMAT_COMMAND.ITALIC];
@@ -247,3 +256,5 @@ export function Toolbar({
     </div>
   );
 }
+
+export const Toolbar = memo(ToolbarImpl);

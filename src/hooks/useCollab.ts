@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   COLLAB_CHANNEL,
   COLLAB_MESSAGE,
@@ -266,15 +266,32 @@ export function useCollab(localUser: LocalUser): UseCollabResult {
     };
   }, []);
 
-  return {
-    peers,
-    remoteCarets,
-    broadcastCaret,
-    broadcastContent,
-    broadcastReviews,
-    broadcastComments,
-    onRemoteContent,
-    onRemoteReviews,
-    onRemoteComments,
-  };
+  // Memoize the returned object so consumers that depend on `collab` don't
+  // tear down + re-attach effects on every render. The inner functions are
+  // already stable via useCallback; peers/remoteCarets change only when their
+  // setState fires.
+  return useMemo(
+    () => ({
+      peers,
+      remoteCarets,
+      broadcastCaret,
+      broadcastContent,
+      broadcastReviews,
+      broadcastComments,
+      onRemoteContent,
+      onRemoteReviews,
+      onRemoteComments,
+    }),
+    [
+      peers,
+      remoteCarets,
+      broadcastCaret,
+      broadcastContent,
+      broadcastReviews,
+      broadcastComments,
+      onRemoteContent,
+      onRemoteReviews,
+      onRemoteComments,
+    ],
+  );
 }

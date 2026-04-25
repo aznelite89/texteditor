@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { memo, useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
 import { type Comment } from '../constants/comments';
 import { UI_LABEL, UI_PROMPT } from '../constants/ui';
 
@@ -57,18 +57,21 @@ function ReplyComposer({ commentId, onSubmit }: ReplyComposerProps) {
   );
 }
 
-export function CommentList({
+function CommentListImpl({
   comments,
   content,
   onAddReply,
   onToggleResolve,
   onDelete,
 }: CommentListProps) {
-  const handleDelete = (id: string) => {
-    if (window.confirm(UI_PROMPT.CONFIRM_DELETE_COMMENT)) {
-      onDelete(id);
-    }
-  };
+  const handleDelete = useCallback(
+    (id: string) => {
+      if (window.confirm(UI_PROMPT.CONFIRM_DELETE_COMMENT)) {
+        onDelete(id);
+      }
+    },
+    [onDelete],
+  );
 
   return (
     <aside className="comments">
@@ -144,3 +147,6 @@ export function CommentList({
     </aside>
   );
 }
+
+export const CommentList = memo(CommentListImpl);
+export default CommentList;

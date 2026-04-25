@@ -1,6 +1,16 @@
-import { forwardRef, useEffect, useRef, type FocusEvent, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  type FocusEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
 import { UI_LABEL } from '../constants/ui';
 import { textOffsetFromSelection } from '../utils/caretOffset';
+import { rafThrottle } from '../utils/rafThrottle';
 
 type EditorProps = {
   content: string;
@@ -8,20 +18,30 @@ type EditorProps = {
   onCaretChange?: (offset: number) => void;
 };
 
-export const Editor = forwardRef<HTMLDivElement, EditorProps>(function Editor(
+const EditorImpl = forwardRef<HTMLDivElement, EditorProps>(function Editor(
   { content, onChange, onCaretChange },
   forwardedRef,
 ) {
   const internalRef = useRef<HTMLDivElement | null>(null);
 
-  const setRef = (node: HTMLDivElement | null) => {
-    internalRef.current = node;
-    if (typeof forwardedRef === 'function') {
-      forwardedRef(node);
-    } else if (forwardedRef) {
-      forwardedRef.current = node;
-    }
-  };
+  // Hold latest callbacks in refs so the document-level listener attaches
+  // exactly once (not on every render when the parent passes new closures).
+  const onCaretChangeRef = useRef(onCaretChange);
+  onCaretChangeRef.current = onCaretChange;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const setRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      internalRef.current = node;
+      if (typeof forwardedRef === 'function') {
+        forwardedRef(node);
+      } else if (forwardedRef) {
+        forwardedRef.current = node;
+      }
+    },
+    [forwardedRef],
+  );
 
   useEffect(() => {
     const el = internalRef.current;
@@ -31,35 +51,38 @@ export const Editor = forwardRef<HTMLDivElement, EditorProps>(function Editor(
     }
   }, [content]);
 
+  // selectionchange fires on every cursor movement — coalesce to one rAF.
   useEffect(() => {
-    if (!onCaretChange) return;
-    const handler = () => {
+    const emit = rafThrottle(() => {
+      const cb = onCaretChangeRef.current;
       const el = internalRef.current;
-      if (!el) return;
+      if (!cb || !el) return;
       const offset = textOffsetFromSelection(el);
-      if (offset !== null) onCaretChange(offset);
+      if (offset !== null) cb(offset);
+    });
+    document.addEventListener('selectionchange', emit);
+    return () => {
+      document.removeEventListener('selectionchange', emit);
+      emit.cancel();
     };
-    document.addEventListener('selectionchange', handler);
-    return () => document.removeEventListener('selectionchange', handler);
-  }, [onCaretChange]);
+  }, []);
 
-  // Belt-and-suspenders: some click/focus paths in real browsers don't fire a
-  // fresh selectionchange event (e.g., a click that doesn't move the caret, or
-  // focus restoring a prior range). Re-broadcast on these events so peers see
-  // the cursor as soon as the local user interacts.
-  const emitCaret = () => {
+  const emitCaret = useCallback(() => {
+    const cb = onCaretChangeRef.current;
     const el = internalRef.current;
-    if (!el || !onCaretChange) return;
-    // Defer one tick so the selection reflects the post-event state.
+    if (!cb || !el) return;
     queueMicrotask(() => {
       const offset = textOffsetFromSelection(el);
-      if (offset !== null) onCaretChange(offset);
+      if (offset !== null) cb(offset);
     });
-  };
+  }, []);
 
-  const handleMouseUp = (_e: MouseEvent<HTMLDivElement>) => emitCaret();
-  const handleKeyUp = (_e: KeyboardEvent<HTMLDivElement>) => emitCaret();
-  const handleFocus = (_e: FocusEvent<HTMLDivElement>) => emitCaret();
+  const handleMouseUp = useCallback((_e: MouseEvent<HTMLDivElement>) => emitCaret(), [emitCaret]);
+  const handleKeyUp = useCallback((_e: KeyboardEvent<HTMLDivElement>) => emitCaret(), [emitCaret]);
+  const handleFocus = useCallback((_e: FocusEvent<HTMLDivElement>) => emitCaret(), [emitCaret]);
+  const handleInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
+    onChangeRef.current((e.currentTarget as HTMLDivElement).innerHTML);
+  }, []);
 
   return (
     <div
@@ -71,10 +94,12 @@ export const Editor = forwardRef<HTMLDivElement, EditorProps>(function Editor(
       aria-multiline="true"
       aria-label={UI_LABEL.APP_TITLE}
       data-placeholder={UI_LABEL.EDITOR_PLACEHOLDER}
-      onInput={(e) => onChange((e.currentTarget as HTMLDivElement).innerHTML)}
+      onInput={handleInput}
       onMouseUp={handleMouseUp}
       onKeyUp={handleKeyUp}
       onFocus={handleFocus}
     />
   );
 });
+
+export const Editor = memo(EditorImpl);

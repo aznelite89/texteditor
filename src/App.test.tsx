@@ -31,6 +31,10 @@ async function flush() {
   await Promise.resolve();
 }
 
+async function flushFrame() {
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+}
+
 function installExecCommand() {
   Object.defineProperty(document, 'execCommand', {
     configurable: true,
@@ -298,6 +302,8 @@ describe('App — Requirement 6: collaborative editing + presence', () => {
     const editor = getEditor();
     editor.innerHTML = '<p>local change</p>';
     fireEvent.input(editor);
+    // The broadcast is rAF-throttled; wait one frame for it to flush.
+    await flushFrame();
     await flush();
 
     const content = received.find((m) => m.type === COLLAB_MESSAGE.CONTENT);

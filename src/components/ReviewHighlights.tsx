@@ -1,6 +1,7 @@
-import { useEffect, useState, type CSSProperties, type RefObject } from 'react';
+import { memo, useEffect, useState, type CSSProperties, type RefObject } from 'react';
 import { REVIEW_COLOR, REVIEW_STATUS, type Review } from '../constants/review';
 import { nodeAtOffset } from '../utils/caretOffset';
+import { rafThrottle } from '../utils/rafThrottle';
 
 type Rect = { top: number; left: number; width: number; height: number };
 
@@ -20,13 +21,13 @@ function isZeroRect(r: DOMRect): boolean {
   return r.top === 0 && r.left === 0 && r.width === 0 && r.height === 0;
 }
 
-export function ReviewHighlights({ editorRef, reviews, content }: ReviewHighlightsProps) {
+function ReviewHighlightsImpl({ editorRef, reviews, content }: ReviewHighlightsProps) {
   const [highlights, setHighlights] = useState<Highlight[]>([]);
 
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) {
-      setHighlights([]);
+      setHighlights((prev) => (prev.length === 0 ? prev : []));
       return;
     }
 
@@ -63,12 +64,13 @@ export function ReviewHighlights({ editorRef, reviews, content }: ReviewHighligh
     };
 
     compute();
-    const onResize = () => compute();
-    window.addEventListener('resize', onResize);
-    window.addEventListener('scroll', onResize, true);
+    const throttled = rafThrottle(compute);
+    window.addEventListener('resize', throttled);
+    window.addEventListener('scroll', throttled, true);
     return () => {
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('scroll', onResize, true);
+      throttled.cancel();
+      window.removeEventListener('resize', throttled);
+      window.removeEventListener('scroll', throttled, true);
     };
   }, [editorRef, reviews, content]);
 
@@ -100,3 +102,5 @@ export function ReviewHighlights({ editorRef, reviews, content }: ReviewHighligh
     </div>
   );
 }
+
+export const ReviewHighlights = memo(ReviewHighlightsImpl);

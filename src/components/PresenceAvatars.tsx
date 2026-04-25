@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { memo, useMemo, type CSSProperties } from 'react';
 import type { LocalUser } from '../hooks/useLocalUser';
 import type { Peer } from '../hooks/useCollab';
 
@@ -15,9 +15,14 @@ type PresenceAvatarsProps = {
   peers: Peer[];
 };
 
-export function PresenceAvatars({ localUser, peers }: PresenceAvatarsProps) {
-  const visible = peers.slice(0, MAX_VISIBLE);
-  const overflow = peers.length - visible.length;
+function PresenceAvatarsImpl({ localUser, peers }: PresenceAvatarsProps) {
+  const { visible, overflow } = useMemo(
+    () => ({
+      visible: peers.slice(0, MAX_VISIBLE),
+      overflow: Math.max(0, peers.length - MAX_VISIBLE),
+    }),
+    [peers],
+  );
 
   return (
     <div className="app__avatars" data-testid="presence-avatars">
@@ -50,3 +55,5 @@ export function PresenceAvatars({ localUser, peers }: PresenceAvatarsProps) {
     </div>
   );
 }
+
+export const PresenceAvatars = memo(PresenceAvatarsImpl);

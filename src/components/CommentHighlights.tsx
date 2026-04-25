@@ -1,6 +1,7 @@
-import { useEffect, useState, type CSSProperties, type RefObject } from 'react';
+import { memo, useEffect, useState, type CSSProperties, type RefObject } from 'react';
 import { COMMENT_HIGHLIGHT_COLOR, type Comment } from '../constants/comments';
 import { nodeAtOffset } from '../utils/caretOffset';
+import { rafThrottle } from '../utils/rafThrottle';
 
 type Rect = { top: number; left: number; width: number; height: number };
 type Highlight = { commentId: string; resolved: boolean; rects: Rect[] };
@@ -15,13 +16,13 @@ function isZeroRect(r: DOMRect): boolean {
   return r.top === 0 && r.left === 0 && r.width === 0 && r.height === 0;
 }
 
-export function CommentHighlights({ editorRef, comments, content }: CommentHighlightsProps) {
+function CommentHighlightsImpl({ editorRef, comments, content }: CommentHighlightsProps) {
   const [highlights, setHighlights] = useState<Highlight[]>([]);
 
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) {
-      setHighlights([]);
+      setHighlights((prev) => (prev.length === 0 ? prev : []));
       return;
     }
 
@@ -58,12 +59,13 @@ export function CommentHighlights({ editorRef, comments, content }: CommentHighl
     };
 
     compute();
-    const onResize = () => compute();
-    window.addEventListener('resize', onResize);
-    window.addEventListener('scroll', onResize, true);
+    const throttled = rafThrottle(compute);
+    window.addEventListener('resize', throttled);
+    window.addEventListener('scroll', throttled, true);
     return () => {
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('scroll', onResize, true);
+      throttled.cancel();
+      window.removeEventListener('resize', throttled);
+      window.removeEventListener('scroll', throttled, true);
     };
   }, [editorRef, comments, content]);
 
@@ -95,3 +97,5 @@ export function CommentHighlights({ editorRef, comments, content }: CommentHighl
     </div>
   );
 }
+
+export const CommentHighlights = memo(CommentHighlightsImpl);

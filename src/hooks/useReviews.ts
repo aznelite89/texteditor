@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { REVIEW_STATUS, type Review } from '../constants/review';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { useLocalStorage } from './useLocalStorage';
@@ -70,14 +70,27 @@ export function useReviews(localUser: LocalUser): UseReviewsResult {
     [setReviews],
   );
 
-  const completedReviews = reviews.filter((r) => r.status === REVIEW_STATUS.COMPLETED);
+  const completedReviews = useMemo(
+    () => reviews.filter((r) => r.status === REVIEW_STATUS.COMPLETED),
+    [reviews],
+  );
 
-  return {
-    reviews,
-    completedReviews,
-    markForReview,
-    completeReview,
-    deleteReview,
-    applyRemoteCompleted,
-  };
+  return useMemo(
+    () => ({
+      reviews,
+      completedReviews,
+      markForReview,
+      completeReview,
+      deleteReview,
+      applyRemoteCompleted,
+    }),
+    [
+      reviews,
+      completedReviews,
+      markForReview,
+      completeReview,
+      deleteReview,
+      applyRemoteCompleted,
+    ],
+  );
 }
