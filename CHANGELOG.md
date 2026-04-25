@@ -3,6 +3,7 @@
 ## 2026-04-25
 
 ### Changed
+- Add app screenshot to README (`assets/app-screenshot.png`)
 - Document how to run tests (`pnpm test`, `pnpm test:run`) in README
 
 ### Fixed

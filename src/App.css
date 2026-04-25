@@ -166,6 +166,16 @@ body {
   animation: saved-pulse 0.4s ease-out;
 }
 
+.app__status--error {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.app__status--error .app__status-dot {
+  background: #f87171;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+}
+
 @keyframes saved-pulse {
   0% {
     box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.4);

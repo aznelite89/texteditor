@@ -8,11 +8,13 @@ export function readJSON<T>(key: string, fallback: T): T {
   }
 }
 
-export function writeJSON<T>(key: string, value: T): void {
+export function writeJSON<T>(key: string, value: T): boolean {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
     // localStorage unavailable or quota exceeded — swallow silently.
+    return false;
   }
 }
 

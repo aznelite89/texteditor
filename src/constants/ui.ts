@@ -41,6 +41,9 @@ export const UI_LABEL = {
   COMMENT_REPLY_PLACEHOLDER: 'Write a reply…',
   COMMENT_RESOLVED_BADGE: 'Resolved',
   COMMENT_HINT: 'Tip: select text in the editor, then click the Comment button in the toolbar to start a thread.',
+  STATUS_READY: 'Ready',
+  STATUS_SAVED: 'All changes saved',
+  STATUS_ERROR: 'Save failed',
 } as const;
 
 export const UI_PROMPT = {

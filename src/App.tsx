@@ -15,6 +15,7 @@ import { ReviewHighlights } from "./components/ReviewHighlights"
 import { Toolbar } from "./components/Toolbar"
 import { WordCount } from "./components/WordCount"
 import { REVIEW_STATUS } from "./constants/review"
+import { SAVE_STATUS, type SaveStatus } from "./constants/saveStatus"
 import { STORAGE_KEYS } from "./constants/storageKeys"
 import { UI_LABEL, UI_PROMPT } from "./constants/ui"
 import { useActiveFormats } from "./hooks/useActiveFormats"
@@ -33,11 +34,11 @@ const ReviewList = lazy(() => import("./components/ReviewList"))
 const CommentList = lazy(() => import("./components/CommentList"))
 const VersionList = lazy(() => import("./components/VersionList"))
 
+const SAVED_FLASH_MS = 2000
+
 export default function App() {
-  const [content, setContent] = useLocalStorage<string>(
-    STORAGE_KEYS.CONTENT,
-    "",
-  )
+  const [content, setContent, contentSaveStatus, contentSavedAt] =
+    useLocalStorage<string>(STORAGE_KEYS.CONTENT, "")
   const { versions, saveVersion, deleteVersion } = useVersions()
   const editorRef = useRef<HTMLDivElement | null>(null)
   const activeFormats = useActiveFormats(editorRef)
@@ -45,8 +46,38 @@ export default function App() {
   const collab = useCollab(localUser)
   const reviewsApi = useReviews(localUser)
   const commentsApi = useComments(localUser)
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle")
-  const [showSavedToast, setShowSavedToast] = useState(false)
+
+  // Transient flash badge: defaults to IDLE (grey). After a real save event
+  // we flip to SAVED for SAVED_FLASH_MS, then return to IDLE. ERROR sticks
+  // until the next save attempt so the user sees the failure.
+  const [statusBadge, setStatusBadge] = useState<SaveStatus>(SAVE_STATUS.IDLE)
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (contentSavedAt === 0) return
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+    setStatusBadge(contentSaveStatus)
+    if (contentSaveStatus === SAVE_STATUS.SAVED) {
+      flashTimerRef.current = setTimeout(() => {
+        setStatusBadge(SAVE_STATUS.IDLE)
+      }, SAVED_FLASH_MS)
+    }
+    return () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+    }
+  }, [contentSaveStatus, contentSavedAt])
+
+  const statusLabel =
+    statusBadge === SAVE_STATUS.SAVED
+      ? UI_LABEL.STATUS_SAVED
+      : statusBadge === SAVE_STATUS.ERROR
+        ? UI_LABEL.STATUS_ERROR
+        : UI_LABEL.STATUS_READY
+  const statusModifier =
+    statusBadge === SAVE_STATUS.SAVED
+      ? "app__status--saved"
+      : statusBadge === SAVE_STATUS.ERROR
+        ? "app__status--error"
+        : ""
 
   // Latest-value refs so handlers can stay stable across renders.
   const collabRef = useRef(collab)
@@ -201,28 +232,6 @@ export default function App() {
     })
   }, [collab])
 
-  // "All changes saved" toast — properly tracks BOTH timers so resetting
-  // typing while the toast is visible doesn't leak the hide timer.
-  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
-    setSaveStatus("idle")
-    idleTimerRef.current = setTimeout(() => {
-      setSaveStatus("saved")
-      setShowSavedToast(true)
-      hideTimerRef.current = setTimeout(() => {
-        setShowSavedToast(false)
-        setSaveStatus("idle")
-      }, 2000)
-    }, 1500)
-    return () => {
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
-    }
-  }, [content])
-
   return (
     <div className="app">
       <header className="app__header">
@@ -234,13 +243,14 @@ export default function App() {
           <PresenceAvatars localUser={localUser} peers={collab.peers} />
           <div className="app__divider" />
           <div
-            className={`app__status ${saveStatus === "saved" ? "app__status--saved" : ""}`}
+            className={`app__status ${statusModifier}`}
+            data-status={statusBadge}
           >
             <span className="app__status-dot" />
             <span
-              className={`app__status-text ${showSavedToast ? "app__status-text--visible" : ""}`}
+              className={`app__status-text ${statusBadge !== SAVE_STATUS.IDLE ? "app__status-text--visible" : ""}`}
             >
-              {showSavedToast ? "All changes saved" : "Ready"}
+              {statusLabel}
             </span>
           </div>
         </div>
