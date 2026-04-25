@@ -16,7 +16,7 @@ import { Toolbar } from "./components/Toolbar"
 import { WordCount } from "./components/WordCount"
 import { REVIEW_STATUS } from "./constants/review"
 import { SAVE_STATUS, type SaveStatus } from "./constants/saveStatus"
-import { STORAGE_KEYS } from "./constants/storageKeys"
+import { STORAGE_KEY_CONTENT } from "./constants/storageKeys"
 import { UI_LABEL, UI_PROMPT } from "./constants/ui"
 import { useActiveFormats } from "./hooks/useActiveFormats"
 import { useCollab } from "./hooks/useCollab"
@@ -30,15 +30,23 @@ import { rafThrottle } from "./utils/rafThrottle"
 import "./App.css"
 
 // Side panel mounts late and isn't on the critical typing path — code-split it.
-const ReviewList = lazy(() => import("./components/ReviewList"))
-const CommentList = lazy(() => import("./components/CommentList"))
-const VersionList = lazy(() => import("./components/VersionList"))
+// `.then(m => ({ default: m.* }))` so `import()` types satisfy `React.lazy` (see tsconfig
+// `verbatimModuleSyntax` / `erasableSyntaxOnly`).
+const ReviewList = lazy(() =>
+  import("./components/ReviewList").then((m) => ({ default: m.ReviewList })),
+)
+const CommentList = lazy(() =>
+  import("./components/CommentList").then((m) => ({ default: m.CommentList })),
+)
+const VersionList = lazy(() =>
+  import("./components/VersionList").then((m) => ({ default: m.VersionList })),
+)
 
 const SAVED_FLASH_MS = 2000
 
 export default function App() {
   const [content, setContent, contentSaveStatus, contentSavedAt] =
-    useLocalStorage<string>(STORAGE_KEYS.CONTENT, "")
+    useLocalStorage<string>(STORAGE_KEY_CONTENT, "")
   const { versions, saveVersion, deleteVersion } = useVersions()
   const editorRef = useRef<HTMLDivElement | null>(null)
   const activeFormats = useActiveFormats(editorRef)

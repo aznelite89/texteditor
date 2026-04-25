@@ -1,13 +1,23 @@
 # Text Editor (React + TypeScript + Vite)
 
-![App screenshot: collaborative editor with reviews, comments, and version history](assets/app-screenshot.png)
-
 A small in-browser text editor with:
 - Bold / Italic formatting
 - Clear button (with confirmation)
 - Live word count
 - Autosave to `localStorage`
 - Named version snapshots (save / restore / delete)
+
+## Screenshots
+
+**Screenshots:**
+
+Collaborative editor — toolbar, remote caret, review highlights, reviews panel, comments, and version history:
+
+![Collaborative text editor with reviews, comments, and version history](./assets/app-screenshot.png)
+
+Same session with an active comment thread (reply and “Write a reply…”):
+
+![Collaborative editor showing threaded comments and replies](./assets/app-screenshot-comments.png)
 
 ## Requirements
 

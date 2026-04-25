@@ -12,7 +12,7 @@ import { UI_LABEL } from '../constants/ui';
 import { textOffsetFromSelection } from '../utils/caretOffset';
 import { rafThrottle } from '../utils/rafThrottle';
 
-type EditorProps = {
+export type EditorProps = {
   content: string;
   onChange: (next: string) => void;
   onCaretChange?: (offset: number) => void;
@@ -102,4 +102,5 @@ const EditorImpl = forwardRef<HTMLDivElement, EditorProps>(function Editor(
   );
 });
 
-export const Editor = memo(EditorImpl);
+// `memo` can infer a truncated prop type for `forwardRef` components; align with the ref component.
+export const Editor = memo(EditorImpl) as typeof EditorImpl;

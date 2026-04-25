@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { type Comment, type Reply } from '../constants/comments';
-import { STORAGE_KEYS } from '../constants/storageKeys';
+import { STORAGE_KEY_COMMENTS } from '../constants/storageKeys';
 import { useLocalStorage } from './useLocalStorage';
 import type { LocalUser } from './useLocalUser';
 
@@ -18,7 +18,7 @@ export type UseCommentsResult = {
 };
 
 export function useComments(localUser: LocalUser): UseCommentsResult {
-  const [comments, setComments] = useLocalStorage<Comment[]>(STORAGE_KEYS.COMMENTS, []);
+  const [comments, setComments] = useLocalStorage<Comment[]>(STORAGE_KEY_COMMENTS, []);
 
   const addComment = useCallback(
     (start: number, end: number, body: string): Comment | null => {

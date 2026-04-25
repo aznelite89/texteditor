@@ -1,4 +1,5 @@
-export const UI_LABEL = {
+/** Split into slices so TS does not infer a truncated `as const` object type (see CommentList / App). */
+const UI_LABEL_A = {
   APP_TITLE: 'Text Editor',
   BOLD: 'B',
   ITALIC: 'I',
@@ -16,6 +17,9 @@ export const UI_LABEL = {
   FONT_SIZE_NORMAL: 'Normal',
   FONT_SIZE_LARGE: 'Large',
   FONT_SIZE_HUGE: 'Huge',
+} as const;
+
+const UI_LABEL_B = {
   BULLET_LIST: 'Bullet list',
   NUMBERED_LIST: 'Numbered list',
   BLOCK_FORMAT: 'Paragraph style',
@@ -30,8 +34,12 @@ export const UI_LABEL = {
   EMPTY_REVIEWS: 'No reviews yet.',
   REVIEW_DRAFT_BADGE: 'Draft',
   REVIEW_COMPLETED_BADGE: 'Completed',
-  REVIEW_HINT: 'Tip: select text in the editor, then click the Review button in the toolbar to request a review.',
+  REVIEW_HINT:
+    'Tip: select text in the editor, then click the Review button in the toolbar to request a review.',
   ADD_COMMENT: 'Add comment',
+} as const;
+
+const UI_LABEL_C = {
   COMMENTS_HEADING: 'Comments',
   EMPTY_COMMENTS: 'No comments yet.',
   COMMENT_RESOLVE: 'Resolve',
@@ -40,17 +48,32 @@ export const UI_LABEL = {
   COMMENT_REPLY: 'Reply',
   COMMENT_REPLY_PLACEHOLDER: 'Write a reply…',
   COMMENT_RESOLVED_BADGE: 'Resolved',
-  COMMENT_HINT: 'Tip: select text in the editor, then click the Comment button in the toolbar to start a thread.',
+  COMMENT_HINT:
+    'Tip: select text in the editor, then click the Comment button in the toolbar to start a thread.',
   STATUS_READY: 'Ready',
   STATUS_SAVED: 'All changes saved',
   STATUS_ERROR: 'Save failed',
 } as const;
 
-export const UI_PROMPT = {
+export const UI_LABEL = {
+  ...UI_LABEL_A,
+  ...UI_LABEL_B,
+  ...UI_LABEL_C,
+} as const;
+
+const UI_PROMPT_A = {
   CONFIRM_CLEAR: 'Clear all text? This cannot be undone.',
   ASK_VERSION_NAME: 'Name this version:',
   CONFIRM_DELETE_VERSION: 'Delete this version?',
+} as const;
+
+const UI_PROMPT_B = {
   CONFIRM_DELETE_REVIEW: 'Delete this review highlight?',
   ASK_COMMENT_BODY: 'Add a comment:',
   CONFIRM_DELETE_COMMENT: 'Delete this comment thread?',
+} as const;
+
+export const UI_PROMPT = {
+  ...UI_PROMPT_A,
+  ...UI_PROMPT_B,
 } as const;

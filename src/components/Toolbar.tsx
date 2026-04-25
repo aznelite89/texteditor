@@ -20,7 +20,7 @@ function notifyFormatChange() {
   });
 }
 
-type ToolbarProps = {
+export type ToolbarProps = {
   onClear: () => void;
   activeFormats: ActiveFormats;
   editorRef: RefObject<HTMLDivElement | null>;
@@ -257,4 +257,4 @@ function ToolbarImpl({
   );
 }
 
-export const Toolbar = memo(ToolbarImpl);
+export const Toolbar = memo<ToolbarProps>(ToolbarImpl);

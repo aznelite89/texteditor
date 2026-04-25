@@ -3,10 +3,18 @@
 ## 2026-04-25
 
 ### Changed
-- Add app screenshot to README (`assets/app-screenshot.png`)
+- README: add **Screenshots** section with two images (`./assets/app-screenshot.png`, `./assets/app-screenshot-comments.png`); use `./assets/` paths for reliable local preview
 - Document how to run tests (`pnpm test`, `pnpm test:run`) in README
 
 ### Fixed
+- `formatCommands`: `FORMAT_COMMAND` uses an explicit `FormatCommandMap`; `FONT_SIZE_VALUE` and `BLOCK_FORMAT` use merged `as const` slices (avoids truncated module / missing `FONT_SIZE_VALUE` in `Toolbar`)
+- `applyFormat` (`src/utils/formatCommand.ts`): first parameter widened to `string` so optional `value` is not rejected when `FormatCommand` is mis-inferred
+- `Editor`: export `EditorProps` and `memo(EditorImpl) as typeof EditorImpl` so `App` sees `onCaretChange` on the public API
+- `Toolbar`: export `ToolbarProps` and use `memo<ToolbarProps>(ToolbarImpl)` so consumers (e.g. `App`) see the full prop surface including `editorRef`
+- `UI_LABEL` / `UI_PROMPT`: split large `as const` literals in `src/constants/ui.ts` into merged slices so TypeScript no longer infers truncated types (missing comment/review/status keys)
+- `STORAGE_KEY_*` named string literals in `src/constants/storageKeys.ts` (used by `useLocalStorage` callers) so TypeScript no longer infers a truncated `STORAGE_KEYS` object type missing `COMMENTS` / `REVIEWS` / `VERSIONS`
+- `React.lazy` side panels: dynamic imports wrap named exports as `{ default: m.* }` so `lazy` matches TypeScript’s `import()` type under `verbatimModuleSyntax` / `erasableSyntaxOnly`
+- TypeScript/IDE: Vitest `expect` now picks up `@testing-library/jest-dom` matchers (e.g. `toHaveAttribute`) via `src/vitest-dom.d.ts` and `tsconfig.app.json` `types` no longer loading the Jest-only entry
 - App freeze / "page unresponsive" under typing + collab load — root causes: every render rebuilt the `collab` object so all child effects torn down + re-attached on every keystroke; the Editor's document `selectionchange` listener was reattached on every render; `broadcastContent` and `broadcastCaret` fired on every keystroke / cursor move with no batching; the highlight overlays remeasured the DOM on every render with no rAF coalescing; the "All changes saved" toast effect leaked its inner `setTimeout` (the cleanup was wrongly returned from inside the timer callback).
 
 ### Performance

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { STORAGE_KEYS } from '../constants/storageKeys';
+import { STORAGE_KEY_VERSIONS } from '../constants/storageKeys';
 import { useLocalStorage } from './useLocalStorage';
 
 export type Version = {
@@ -15,7 +15,7 @@ function makeId(): string {
 
 export function useVersions() {
   const [versions, setVersions] = useLocalStorage<Version[]>(
-    STORAGE_KEYS.VERSIONS,
+    STORAGE_KEY_VERSIONS,
     [],
   );
 

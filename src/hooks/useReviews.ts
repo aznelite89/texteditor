@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { REVIEW_STATUS, type Review } from '../constants/review';
-import { STORAGE_KEYS } from '../constants/storageKeys';
+import { STORAGE_KEY_REVIEWS } from '../constants/storageKeys';
 import { useLocalStorage } from './useLocalStorage';
 import type { LocalUser } from './useLocalUser';
 
@@ -18,7 +18,7 @@ export type UseReviewsResult = {
 };
 
 export function useReviews(localUser: LocalUser): UseReviewsResult {
-  const [reviews, setReviews] = useLocalStorage<Review[]>(STORAGE_KEYS.REVIEWS, []);
+  const [reviews, setReviews] = useLocalStorage<Review[]>(STORAGE_KEY_REVIEWS, []);
 
   const markForReview = useCallback(
     (start: number, end: number): Review | null => {
