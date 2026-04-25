@@ -400,6 +400,43 @@ body {
   pointer-events: none;
 }
 
+.remote-cursors {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.remote-cursor {
+  position: absolute;
+  width: 2px;
+  pointer-events: none;
+}
+
+.remote-cursor__bar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--peer-color, #8b5cf6);
+  border-radius: 1px;
+  box-shadow: 0 0 6px var(--peer-color, #8b5cf6);
+}
+
+.remote-cursor__label {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: white;
+  background: var(--peer-color, #8b5cf6);
+  border-radius: 3px;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
 .toolbar__color {
   width: 100%;
   height: 100%;

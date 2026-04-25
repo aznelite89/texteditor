@@ -2,7 +2,17 @@
 
 ## 2026-04-24
 
+### Fixed
+- Remote cursor now appears on click (not only on typing): caret offset broadcasts on `mouseup`/`keyup`/`focus` in addition to `selectionchange`; `textOffsetFromSelection` handles root-as-anchor selections; `RemoteCursors` falls back to `getClientRects()` then the parent element rect when `getBoundingClientRect()` is all zeros (`src/utils/caretOffset.ts`, `src/components/Editor.tsx`, `src/components/RemoteCursors.tsx`)
+
 ### Added
+- Real-time collaborative editing over `BroadcastChannel('quiz.collab.v1')`: same-browser-tab presence, content sync, and remote cursors (`src/hooks/useCollab.ts`, `src/constants/collab.ts`)
+- Per-tab user identity hook with stable id/name/color persisted in sessionStorage (`src/hooks/useLocalUser.ts`, `src/utils/userId.ts`, `src/utils/userColor.ts`, `src/utils/sessionStore.ts`)
+- Caret-offset utilities: linear text offset from a Selection, and inverse lookup of a text node at a given offset (`src/utils/caretOffset.ts`)
+- `PresenceAvatars` component replacing the static avatar block; `RemoteCursors` overlay rendering colored caret bars with peer name labels (`src/components/PresenceAvatars.tsx`, `src/components/RemoteCursors.tsx`)
+- Editor accepts `onCaretChange` for broadcasting local caret offset to peers (`src/components/Editor.tsx`)
+- Phase 5 tests: 8 caret-offset, 3 user-color, 3 useLocalUser, 10 useCollab, 4 PresenceAvatars, 4 RemoteCursors, 6 App-collab integration
+- BroadcastChannel + sessionStorage polyfills in `src/test/setup.ts` (Node 25's globals shadow jsdom and do not deliver across instances)
 - `wordCount` utility tests (`src/utils/wordCount.test.ts`) covering `htmlToText` (tags, entities, empty) and `countWords` (empty, whitespace, single, multi, punctuation, numbers)
 - `WordCount` component tests (`src/components/WordCount.test.tsx`) covering render, live updates, formatting-tag stripping, and `aria-live="polite"`
 - App-level word-count integration tests in `src/App.test.tsx` covering empty start, live updates on input, and saved-content count on mount

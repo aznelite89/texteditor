@@ -1,12 +1,16 @@
 import { useCallback, useState, useEffect, useRef } from "react"
 import { Editor } from "./components/Editor"
+import { PresenceAvatars } from "./components/PresenceAvatars"
+import { RemoteCursors } from "./components/RemoteCursors"
 import { Toolbar } from "./components/Toolbar"
 import { VersionList } from "./components/VersionList"
 import { WordCount } from "./components/WordCount"
 import { STORAGE_KEYS } from "./constants/storageKeys"
 import { UI_LABEL } from "./constants/ui"
 import { useActiveFormats } from "./hooks/useActiveFormats"
+import { useCollab } from "./hooks/useCollab"
 import { useLocalStorage } from "./hooks/useLocalStorage"
+import { useLocalUser } from "./hooks/useLocalUser"
 import { useVersions } from "./hooks/useVersions"
 import "./App.css"
 
@@ -18,11 +22,43 @@ export default function App() {
   const { versions, saveVersion, deleteVersion } = useVersions()
   const editorRef = useRef<HTMLDivElement | null>(null)
   const activeFormats = useActiveFormats(editorRef)
+  const localUser = useLocalUser()
+  const collab = useCollab(localUser)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle")
   const [showSavedToast, setShowSavedToast] = useState(false)
 
-  const clear = useCallback(() => setContent(""), [setContent])
-  const restore = useCallback((next: string) => setContent(next), [setContent])
+  const handleLocalChange = useCallback(
+    (next: string) => {
+      setContent(next)
+      collab.broadcastContent(next)
+    },
+    [setContent, collab],
+  )
+
+  const handleCaretChange = useCallback(
+    (offset: number) => collab.broadcastCaret(offset),
+    [collab],
+  )
+
+  const clear = useCallback(() => {
+    setContent("")
+    collab.broadcastContent("")
+  }, [setContent, collab])
+
+  const restore = useCallback(
+    (next: string) => {
+      setContent(next)
+      collab.broadcastContent(next)
+    },
+    [setContent, collab],
+  )
+
+  // Apply remote content updates from peers.
+  useEffect(() => {
+    return collab.onRemoteContent((html) => {
+      setContent(html)
+    })
+  }, [collab, setContent])
 
   // Show "All changes saved" toast 1.5s after the user stops typing
   useEffect(() => {
@@ -48,32 +84,7 @@ export default function App() {
           <span className="app__badge">Collaborative</span>
         </div>
         <div className="app__header-right">
-          <div className="app__avatars">
-            <div className="app__avatar app__avatar--you" title="You">
-              <span>Y</span>
-            </div>
-            <div
-              className="app__avatar"
-              style={{
-                background: "linear-gradient(135deg, #8b5cf6, #a78bfa)"
-              }}
-              title="Alex"
-            >
-              <span>A</span>
-            </div>
-            <div
-              className="app__avatar"
-              style={{
-                background: "linear-gradient(135deg, #10b981, #34d399)"
-              }}
-              title="Morgan"
-            >
-              <span>M</span>
-            </div>
-            <div className="app__avatar app__avatar--more" title="2 more">
-              <span>+2</span>
-            </div>
-          </div>
+          <PresenceAvatars localUser={localUser} peers={collab.peers} />
           <div className="app__divider" />
           <div
             className={`app__status ${saveStatus === "saved" ? "app__status--saved" : ""}`}
@@ -89,9 +100,24 @@ export default function App() {
       </header>
       <main className="app__main">
         <section className="app__editor-section">
-          <Toolbar onClear={clear} activeFormats={activeFormats} editorRef={editorRef} />
+          <Toolbar
+            onClear={clear}
+            activeFormats={activeFormats}
+            editorRef={editorRef}
+          />
           <div className="editor-wrapper">
-            <Editor ref={editorRef} content={content} onChange={setContent} />
+            <Editor
+              ref={editorRef}
+              content={content}
+              onChange={handleLocalChange}
+              onCaretChange={handleCaretChange}
+            />
+            <RemoteCursors
+              editorRef={editorRef}
+              carets={collab.remoteCarets}
+              peers={collab.peers}
+              content={content}
+            />
             <WordCount content={content} />
           </div>
         </section>

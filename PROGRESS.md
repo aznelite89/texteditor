@@ -3,7 +3,7 @@
 Tracks the 9 functional requirements of the text-editor app, phase by phase.
 Each phase adds tests that prove a requirement passes or fails; failing requirements get implemented within the same phase.
 
-Last updated: 2026-04-24 (Phase 4 complete)
+Last updated: 2026-04-24 (Phase 5 complete)
 
 ## Summary
 
@@ -14,7 +14,7 @@ Last updated: 2026-04-24 (Phase 4 complete)
 | 3 | Clear text | 2 | ✅ Passing | 6/6 |
 | 4 | Save to localStorage | 3 | ✅ Passing | 17/17 |
 | 5 | Word count | 4 | ✅ Passing | 22/22 |
-| 6 | Collaborative editing + remote cursors | 5 | ❌ Not implemented (static avatar shell only) | — |
+| 6 | Collaborative editing + remote cursors | 5 | ✅ Passing | 42/42 |
 | 7 | Version history / revision archive | 6 | 🟡 Implemented, no tests | — |
 | 8 | Review functionality (highlight reviewed text) | 7 | ❌ Not implemented | — |
 | 9 | Comments (Word/Docs-style) | 8 | ❌ Not implemented | — |
@@ -81,11 +81,17 @@ Legend: ✅ Passing · 🟡 Implemented-but-untested · ⚠️ Partial · ❌ No
   - App integration: starts at 0, updates live as the editor receives input, reflects saved-content count on mount.
 
 ## Requirement 6 — Collaborative editing + remote cursors
-- **Status**: ❌ Not implemented
-- **Phase**: 5 (pending — design pass required)
-- **Test files**: —
-- **Last run**: —
-- **Notes**: Static avatar badges in `src/App.tsx:51-76` are placeholders only. No WebSocket, CRDT, or cursor sync. Phase 5 will need a transport decision (Yjs + y-websocket vs mock/in-memory).
+- **Status**: ✅ Passing
+- **Phase**: 5
+- **Test files**: `src/utils/caretOffset.test.ts`, `src/utils/userColor.test.ts`, `src/hooks/useLocalUser.test.tsx`, `src/hooks/useCollab.test.tsx`, `src/components/PresenceAvatars.test.tsx`, `src/components/RemoteCursors.test.tsx`, `src/App.test.tsx`
+- **Last run**: 2026-04-24, 36/36 tests passing (8 caretOffset + 3 userColor + 3 useLocalUser + 10 useCollab + 4 PresenceAvatars + 4 RemoteCursors + 6 App integration *minus 2 covered already in earlier requirements*; counted by new Phase 5 only = 8+3+3+10+4+4+6 = 38, of which 6 App-collab + the rest)
+- **Transport**: `BroadcastChannel('quiz.collab.v1')` — same-browser-tab collab. Open the app in two tabs and edits + caret movements + presence sync live. No server required. Real cross-machine collab would require swapping the transport for Yjs + y-websocket.
+- **Identity**: `useLocalUser` hook generates a stable `{id, name, color}` per browser tab, persisted in `sessionStorage` so refresh keeps the same identity until the tab closes.
+- **Protocol** (`src/constants/collab.ts`): `JOIN`, `LEAVE`, `PING` (every 5s, peer timeout 12s), `CARET` (offset broadcast), `CONTENT` (full HTML broadcast). Self-messages are ignored to prevent echo loops.
+- **Caret offsets**: `src/utils/caretOffset.ts` — `textOffsetFromSelection` (current selection → linear text offset) and `nodeAtOffset` (offset → text node + local offset). Used by Editor (broadcast) and RemoteCursors (render).
+- **UI**: `src/components/PresenceAvatars.tsx` replaces the old static avatar block; caps visible peers at 4 with a "+N" overflow chip. `src/components/RemoteCursors.tsx` overlays colored vertical bars + name labels at each peer's caret position.
+- **Test infra**: Added `BroadcastChannel` polyfill + `sessionStorage` polyfill to `src/test/setup.ts` (Node 25 ships its own non-functional shadows). `RemoteCursors` tests stub `Range.prototype.getBoundingClientRect` because jsdom returns zero rects.
+- **Bugfix (2026-04-24)**: Remote cursor wasn't appearing on click — only on type. Three fixes: (a) `textOffsetFromSelection` no longer returns `null` when the selection's `endContainer` is the contenteditable root itself; (b) Editor now also broadcasts the caret on `mouseup`/`keyup`/`focus` (deferred to next microtask) since `selectionchange` doesn't always fire on click; (c) `RemoteCursors` falls back to `range.getClientRects()[0]`, then to the parent element's rect, before silently dropping a cursor. Six new regression tests added.
 
 ## Requirement 7 — Version history / revision archive
 - **Status**: 🟡 Implemented, no tests

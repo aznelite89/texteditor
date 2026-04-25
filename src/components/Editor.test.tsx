@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import { Editor } from './Editor';
@@ -67,6 +67,51 @@ describe('Editor — Requirement 1: text input and display', () => {
 
     rerender(<Editor content="<p>after</p>" onChange={() => {}} />);
     expect(editor.innerHTML).toBe('<p>after</p>');
+  });
+
+  it('emits onCaretChange on mouseup (click) even when selectionchange does not fire', async () => {
+    const handleCaret = vi.fn();
+    render(<Editor content="<p>hello world</p>" onChange={() => {}} onCaretChange={handleCaret} />);
+    const editor = getEditor();
+
+    // Place a Range explicitly, then dispatch mouseup. Importantly we do NOT
+    // dispatch a selectionchange event, mirroring browsers where a click that
+    // doesn't actually move the caret skips selectionchange.
+    const text = editor.querySelector('p')!.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(text, 6);
+    range.setEnd(text, 6);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    fireEvent.mouseUp(editor);
+
+    await waitFor(() => {
+      expect(handleCaret).toHaveBeenCalled();
+    });
+    expect(handleCaret.mock.calls.at(-1)?.[0]).toBe(6);
+  });
+
+  it('emits onCaretChange on focus (covers focus paths where the same range is restored)', async () => {
+    const handleCaret = vi.fn();
+    render(<Editor content="<p>focus me</p>" onChange={() => {}} onCaretChange={handleCaret} />);
+    const editor = getEditor();
+
+    const text = editor.querySelector('p')!.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(text, 5);
+    range.setEnd(text, 5);
+    const sel = document.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    fireEvent.focus(editor);
+
+    await waitFor(() => {
+      expect(handleCaret).toHaveBeenCalled();
+    });
+    expect(handleCaret.mock.calls.at(-1)?.[0]).toBe(5);
   });
 
   it('does NOT rewrite innerHTML when the incoming content prop matches the current DOM', () => {

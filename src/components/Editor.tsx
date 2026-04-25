@@ -1,13 +1,15 @@
-import { forwardRef, useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useRef, type FocusEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import { UI_LABEL } from '../constants/ui';
+import { textOffsetFromSelection } from '../utils/caretOffset';
 
 type EditorProps = {
   content: string;
   onChange: (next: string) => void;
+  onCaretChange?: (offset: number) => void;
 };
 
 export const Editor = forwardRef<HTMLDivElement, EditorProps>(function Editor(
-  { content, onChange },
+  { content, onChange, onCaretChange },
   forwardedRef,
 ) {
   const internalRef = useRef<HTMLDivElement | null>(null);
@@ -29,6 +31,36 @@ export const Editor = forwardRef<HTMLDivElement, EditorProps>(function Editor(
     }
   }, [content]);
 
+  useEffect(() => {
+    if (!onCaretChange) return;
+    const handler = () => {
+      const el = internalRef.current;
+      if (!el) return;
+      const offset = textOffsetFromSelection(el);
+      if (offset !== null) onCaretChange(offset);
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => document.removeEventListener('selectionchange', handler);
+  }, [onCaretChange]);
+
+  // Belt-and-suspenders: some click/focus paths in real browsers don't fire a
+  // fresh selectionchange event (e.g., a click that doesn't move the caret, or
+  // focus restoring a prior range). Re-broadcast on these events so peers see
+  // the cursor as soon as the local user interacts.
+  const emitCaret = () => {
+    const el = internalRef.current;
+    if (!el || !onCaretChange) return;
+    // Defer one tick so the selection reflects the post-event state.
+    queueMicrotask(() => {
+      const offset = textOffsetFromSelection(el);
+      if (offset !== null) onCaretChange(offset);
+    });
+  };
+
+  const handleMouseUp = (_e: MouseEvent<HTMLDivElement>) => emitCaret();
+  const handleKeyUp = (_e: KeyboardEvent<HTMLDivElement>) => emitCaret();
+  const handleFocus = (_e: FocusEvent<HTMLDivElement>) => emitCaret();
+
   return (
     <div
       ref={setRef}
@@ -40,6 +72,9 @@ export const Editor = forwardRef<HTMLDivElement, EditorProps>(function Editor(
       aria-label={UI_LABEL.APP_TITLE}
       data-placeholder={UI_LABEL.EDITOR_PLACEHOLDER}
       onInput={(e) => onChange((e.currentTarget as HTMLDivElement).innerHTML)}
+      onMouseUp={handleMouseUp}
+      onKeyUp={handleKeyUp}
+      onFocus={handleFocus}
     />
   );
 });
